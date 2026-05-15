@@ -517,10 +517,15 @@ def api_update_report(report_id: int, payload: ReportUpdate) -> dict:
         conn.execute(
             """
             UPDATE reports
-            SET final_content = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            SET content = ?,
+                has_manual_edits = CASE
+                    WHEN ? = generated_content THEN 0
+                    ELSE 1
+                END,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (payload.final_content, payload.status, report_id),
+            (payload.content, payload.content, report_id),
         )
         return get_report(conn, report_id)
 

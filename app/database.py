@@ -37,14 +37,14 @@ CREATE TABLE IF NOT EXISTS reports (
     title TEXT NOT NULL,
     period_start TEXT NOT NULL,
     period_end TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'draft',
     auto_generated INTEGER NOT NULL DEFAULT 0,
     llm_provider TEXT NOT NULL DEFAULT 'openai-compatible',
     llm_model TEXT NOT NULL DEFAULT '',
     prompt_version TEXT NOT NULL DEFAULT 'v1',
     source_snapshot TEXT NOT NULL,
-    draft_content TEXT NOT NULL,
-    final_content TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    generated_content TEXT NOT NULL DEFAULT '',
+    has_manual_edits INTEGER NOT NULL DEFAULT 0,
     generation_notes TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -108,6 +108,7 @@ class Database:
         with self.connection() as conn:
             conn.executescript(SCHEMA_SQL)
             self._migrate_author_aliases(conn)
+            self._migrate_reports_content_model(conn)
             self._migrate_reports_uniqueness(conn)
             self._seed_defaults(conn)
 
@@ -208,7 +209,7 @@ class Database:
             dict(row)
             for row in conn.execute(
                 """
-                SELECT id, report_type, period_start, period_end, status, created_at
+                SELECT *
                 FROM reports
                 ORDER BY report_type, period_start, period_end, datetime(created_at) DESC, id DESC
                 """
@@ -223,8 +224,8 @@ class Database:
         for duplicates in grouped.values():
             if len(duplicates) <= 1:
                 continue
-            final_rows = [row for row in duplicates if row["status"] == "final"]
-            keeper = final_rows[0] if final_rows else duplicates[0]
+            edited_rows = [row for row in duplicates if self._row_has_manual_edits(row)]
+            keeper = edited_rows[0] if edited_rows else duplicates[0]
             delete_ids.extend(row["id"] for row in duplicates if row["id"] != keeper["id"])
 
         if delete_ids:
@@ -236,6 +237,48 @@ class Database:
             ON reports (report_type, period_start, period_end)
             """
         )
+
+    def _migrate_reports_content_model(self, conn: sqlite3.Connection) -> None:
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(reports)").fetchall()
+        }
+        legacy_columns = [name for name in ("draft_content", "final_content", "status") if name in columns]
+        if "content" not in columns:
+            conn.execute("ALTER TABLE reports ADD COLUMN content TEXT NOT NULL DEFAULT ''")
+        if "generated_content" not in columns:
+            conn.execute("ALTER TABLE reports ADD COLUMN generated_content TEXT NOT NULL DEFAULT ''")
+        if "has_manual_edits" not in columns:
+            conn.execute("ALTER TABLE reports ADD COLUMN has_manual_edits INTEGER NOT NULL DEFAULT 0")
+
+        select_columns = ["id", "content", "generated_content", "has_manual_edits", *legacy_columns]
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                f"SELECT {', '.join(select_columns)} FROM reports"
+            ).fetchall()
+        ]
+        for row in rows:
+            generated_content = row.get("generated_content") or row.get("draft_content") or ""
+            content = row.get("content") or row.get("final_content") or generated_content
+            has_manual_edits = 1 if content != generated_content else 0
+            if row.get("has_manual_edits") != has_manual_edits or row.get("content") != content or row.get("generated_content") != generated_content:
+                conn.execute(
+                    """
+                    UPDATE reports
+                    SET content = ?, generated_content = ?, has_manual_edits = ?, updated_at = updated_at
+                    WHERE id = ?
+                    """,
+                    (content, generated_content, has_manual_edits, row["id"]),
+                )
+
+    @staticmethod
+    def _row_has_manual_edits(row: dict) -> bool:
+        if "has_manual_edits" in row:
+            return bool(row["has_manual_edits"])
+        final_content = row.get("final_content") or ""
+        draft_content = row.get("draft_content") or ""
+        return bool(final_content and final_content != draft_content)
 
 
 def create_database(settings: Settings) -> Database:

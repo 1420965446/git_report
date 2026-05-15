@@ -96,8 +96,7 @@ class ReportGenerateRequest(BaseModel):
 
 
 class ReportUpdate(BaseModel):
-    final_content: str
-    status: Literal["draft", "final"] = "final"
+    content: str
 
 
 class ReportRead(BaseModel):
@@ -106,14 +105,14 @@ class ReportRead(BaseModel):
     title: str
     period_start: str
     period_end: str
-    status: str
     auto_generated: bool
     llm_provider: str
     llm_model: str
     prompt_version: str
     source_snapshot: dict[str, Any]
-    draft_content: str
-    final_content: str
+    content: str
+    generated_content: str
+    has_manual_edits: bool
     generation_notes: str
     created_at: str
     updated_at: str

@@ -5,7 +5,6 @@ cd /d "%~dp0"
 
 set "VENV_DIR=%CD%\.venv"
 set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
-set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
 set "URL=http://127.0.0.1:8000"
 
 echo [1/4] Checking virtual environment...
@@ -27,7 +26,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-"%PIP_EXE%" install -r requirements.txt
+"%PYTHON_EXE%" -m pip install -r requirements.txt
 if errorlevel 1 (
   echo Failed to install dependencies.
   pause

@@ -114,8 +114,8 @@ class ReportingTestCase(unittest.TestCase):
                     "date": "2026-05-12",
                     "report_id": 1,
                     "title": "2026-05-12 日报",
-                    "status": "draft",
-                    "content_source": "draft_content",
+                    "has_manual_edits": False,
+                    "content_source": "generated_content",
                     "is_empty": False,
                     "content": "完成日报生成功能修复。",
                 },
@@ -123,8 +123,8 @@ class ReportingTestCase(unittest.TestCase):
                     "date": "2026-05-13",
                     "report_id": 2,
                     "title": "2026-05-13 日报",
-                    "status": "draft",
-                    "content_source": "draft_content",
+                    "has_manual_edits": False,
+                    "content_source": "generated_content",
                     "is_empty": True,
                     "content": "当前周期未识别到有效提交，可补充非代码工作。",
                 },
@@ -333,16 +333,16 @@ class ReportingTestCase(unittest.TestCase):
             db.initialize()
             with db.connection() as conn:
                 existing_days = [
-                    ("2026-05-12T00:00:00+08:00", "2026-05-12T23:59:59.999999+08:00", "draft day 1", "", '{"commit_count": 0}'),
-                    ("2026-05-13T00:00:00+08:00", "2026-05-13T23:59:59.999999+08:00", "draft day 2", "final day 2", '{"commit_count": 1}'),
+                    ("2026-05-12T00:00:00+08:00", "2026-05-12T23:59:59.999999+08:00", "generated day 1", "generated day 1", 0, '{"commit_count": 0}'),
+                    ("2026-05-13T00:00:00+08:00", "2026-05-13T23:59:59.999999+08:00", "final day 2", "draft day 2", 1, '{"commit_count": 1}'),
                 ]
                 for index, item in enumerate(existing_days, start=1):
                     conn.execute(
                         """
                         INSERT INTO reports (
-                            report_type, title, period_start, period_end, status, auto_generated,
+                            report_type, title, period_start, period_end, auto_generated,
                             llm_provider, llm_model, prompt_version, source_snapshot,
-                            draft_content, final_content, generation_notes
+                            content, generated_content, has_manual_edits, generation_notes
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
@@ -350,14 +350,14 @@ class ReportingTestCase(unittest.TestCase):
                             f"day-{index}",
                             item[0],
                             item[1],
-                            "final" if item[3] else "draft",
                             0,
                             "openai-compatible",
                             "stub-model",
                             "v3-commit-summary-based",
-                            item[4],
+                            item[5],
                             item[2],
                             item[3],
+                            item[4],
                             "",
                         ),
                     )
@@ -385,7 +385,7 @@ class ReportingTestCase(unittest.TestCase):
                 self.assertEqual(daily_count, 7)
                 self.assertIn("复用已有日报 2 天", report["generation_notes"])
                 day2 = next(item for item in report["source_snapshot"]["daily_reports"] if item["date"] == "2026-05-13")
-                self.assertEqual(day2["content_source"], "final_content")
+                self.assertEqual(day2["content_source"], "content")
                 self.assertEqual(day2["content"], "final day 2")
 
     def test_generate_report_reuses_persisted_commit_summary(self) -> None:
@@ -472,6 +472,89 @@ class ReportingTestCase(unittest.TestCase):
                     generate_report.__globals__["collect_commits"] = original_collect_commits
 
                 self.assertIn("完善 service 返回结果", report["source_snapshot"]["commits"][0]["summary"])
+
+    def test_generate_report_preserves_saved_content_when_regenerating(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "app.db")
+            db.initialize()
+            with db.connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO repositories (name, path, is_enabled, exclude_merge_commits, exclude_bots, notes)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    ("demo", "C:/repo/demo", 1, 1, 1, ""),
+                )
+                repository_id = conn.execute("SELECT id FROM repositories WHERE path = ?", ("C:/repo/demo",)).fetchone()["id"]
+                conn.execute(
+                    """
+                    INSERT INTO author_aliases (repository_id, canonical_name, alias_name, alias_email)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (repository_id, "张三", "", "me@company.com"),
+                )
+
+                original_collect_commits = generate_report.__globals__["collect_commits"]
+
+                def stub_collect_commits(*args, **kwargs):
+                    return [
+                        CommitRecord(
+                            repository="demo",
+                            repository_path="C:/repo/demo",
+                            commit_hash="abc123",
+                            author_name="张三",
+                            author_email="me@company.com",
+                            authored_at="2026-05-13T10:00:00+08:00",
+                            subject="fix",
+                            body="",
+                            changed_files=["app/service.py"],
+                            diff_text="diff --git a/app/service.py b/app/service.py",
+                        )
+                    ]
+
+                generate_report.__globals__["collect_commits"] = stub_collect_commits
+                try:
+                    class StubLlmClient:
+                        model = "stub-model"
+
+                        def __init__(self):
+                            self.report_text = "generated v1"
+
+                        def generate_commit_summary(self, commit_payload: dict) -> tuple[str | None, str]:
+                            return "summary text", "提交摘要生成成功。"
+
+                        def generate_report(self, prompt: str, metadata: dict | None = None) -> tuple[str | None, str]:
+                            return self.report_text, "LLM 生成成功。"
+
+                    llm_client = StubLlmClient()
+                    report = generate_report(
+                        conn=conn,
+                        report_type="daily",
+                        timezone="Asia/Shanghai",
+                        llm_client=llm_client,
+                        period_start="2026-05-13T00:00:00",
+                        period_end="2026-05-13T23:59:59",
+                    )
+                    conn.execute(
+                        "UPDATE reports SET content = ?, has_manual_edits = 1 WHERE id = ?",
+                        ("manual keep", report["id"]),
+                    )
+                    llm_client.report_text = "generated v2"
+
+                    regenerated = generate_report(
+                        conn=conn,
+                        report_type="daily",
+                        timezone="Asia/Shanghai",
+                        llm_client=llm_client,
+                        period_start="2026-05-13T00:00:00",
+                        period_end="2026-05-13T23:59:59",
+                    )
+                finally:
+                    generate_report.__globals__["collect_commits"] = original_collect_commits
+
+                self.assertEqual(regenerated["content"], "manual keep")
+                self.assertEqual(regenerated["generated_content"], "generated v2")
+                self.assertTrue(regenerated["has_manual_edits"])
 
     def test_generate_commit_summaries_for_period_reuses_existing_items(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -685,11 +768,12 @@ class ReportingTestCase(unittest.TestCase):
             db.initialize()
             with db.connection() as conn2:
                 rows = conn2.execute(
-                    "SELECT id, title, status, final_content FROM reports WHERE report_type = 'daily'"
+                    "SELECT id, title, content, generated_content, has_manual_edits FROM reports WHERE report_type = 'daily'"
                 ).fetchall()
                 self.assertEqual(len(rows), 1)
-                self.assertEqual(rows[0]["status"], "final")
-                self.assertEqual(rows[0]["final_content"], "final keep")
+                self.assertEqual(rows[0]["content"], "final keep")
+                self.assertEqual(rows[0]["generated_content"], "draft newer")
+                self.assertEqual(rows[0]["has_manual_edits"], 1)
 
     def test_llm_runtime_diagnostic_mentions_timeout_and_prompt_size(self) -> None:
         client = LlmClient("https://api.example.com/v1", "demo-model", "test-key", 90, 40)

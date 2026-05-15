@@ -174,13 +174,13 @@ class LlmClient:
         )
         if body is None:
             if message.startswith("LLM 未配置"):
-                return None, "LLM 未配置，已返回规则生成草稿。"
+                return None, "LLM 未配置，已返回规则生成内容。"
             return None, message
 
         try:
             content = body["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError):
-            return None, "LLM 返回结构不符合预期，已返回规则生成草稿。"
+            return None, "LLM 返回结构不符合预期，已返回规则生成内容。"
         return content, "LLM 生成成功。"
 
     def generate_commit_summary(self, commit_payload: dict[str, Any]) -> tuple[str | None, str]:

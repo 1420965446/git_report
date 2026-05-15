@@ -275,7 +275,7 @@ def build_weekly_structured_summary(start_at: datetime, end_at: datetime, daily_
                 "date": item["period_start"][:10],
                 "report_id": item["id"],
                 "title": item["title"],
-                "status": item["status"],
+                "has_manual_edits": item["has_manual_edits"],
                 "content_source": item["content_source"],
                 "is_empty": item["is_empty"],
                 "content": item["content"],
@@ -339,7 +339,7 @@ def build_fallback_draft(report_type: str, structured_summary: dict) -> str:
         [
             "",
             "### 风险与说明",
-            "- 当前草稿仅基于代码改动生成，适合先确认已完成事项；业务背景、协作沟通和后续计划建议人工补充。",
+            "- 当前内容仅基于代码改动生成，适合先确认已完成事项；业务背景、协作沟通和后续计划建议人工补充。",
         ]
     )
     return "\n".join(lines)
@@ -403,6 +403,14 @@ def _normalize_commit_summary_row(row: sqlite3.Row | dict) -> dict:
     return item
 
 
+def _normalize_report_row(row: sqlite3.Row | dict) -> dict:
+    item = dict(row)
+    item["auto_generated"] = bool(item["auto_generated"])
+    item["has_manual_edits"] = bool(item.get("has_manual_edits", 0))
+    item["source_snapshot"] = json.loads(item["source_snapshot"]) if isinstance(item["source_snapshot"], str) else item["source_snapshot"]
+    return item
+
+
 def _fetch_report_by_period(
     conn: sqlite3.Connection,
     report_type: str,
@@ -419,10 +427,7 @@ def _fetch_report_by_period(
     ).fetchone()
     if not row:
         return None
-    item = dict(row)
-    item["auto_generated"] = bool(item["auto_generated"])
-    item["source_snapshot"] = json.loads(item["source_snapshot"])
-    return item
+    return _normalize_report_row(row)
 
 
 def _store_report(
@@ -432,28 +437,28 @@ def _store_report(
     end_at: datetime,
     llm_client: LlmClient,
     structured_summary: dict,
-    draft_content: str,
+    generated_content: str,
     notes: list[str],
     auto_generated: bool,
     overwrite_final: bool,
     prompt_version: str,
 ) -> dict:
     existing = _fetch_report_by_period(conn, report_type, start_at, end_at)
-    final_content = ""
-    status = "draft"
-    if existing and existing["final_content"] and not overwrite_final:
-        final_content = existing["final_content"]
-        status = existing["status"]
+    content = generated_content
+    has_manual_edits = 0
+    if existing and existing["has_manual_edits"] and not overwrite_final:
+        content = existing["content"]
+        has_manual_edits = 1
 
     payload = (
         build_title(report_type, start_at, end_at),
-        status,
         1 if auto_generated else 0,
         llm_client.model,
         prompt_version,
         serialize_snapshot(structured_summary),
-        draft_content,
-        final_content,
+        content,
+        generated_content,
+        has_manual_edits,
         "\n".join(notes),
         report_type,
         start_at.isoformat(),
@@ -464,9 +469,9 @@ def _store_report(
         conn.execute(
             """
             UPDATE reports
-            SET title = ?, status = ?, auto_generated = ?, llm_provider = 'openai-compatible',
-                llm_model = ?, prompt_version = ?, source_snapshot = ?, draft_content = ?,
-                final_content = ?, generation_notes = ?, updated_at = CURRENT_TIMESTAMP
+            SET title = ?, auto_generated = ?, llm_provider = 'openai-compatible',
+                llm_model = ?, prompt_version = ?, source_snapshot = ?, content = ?,
+                generated_content = ?, has_manual_edits = ?, generation_notes = ?, updated_at = CURRENT_TIMESTAMP
             WHERE report_type = ? AND period_start = ? AND period_end = ?
             """,
             payload,
@@ -476,10 +481,10 @@ def _store_report(
         cursor = conn.execute(
             """
             INSERT INTO reports (
-                title, status, auto_generated, llm_provider, llm_model, prompt_version,
-                source_snapshot, draft_content, final_content, generation_notes,
+                title, auto_generated, llm_provider, llm_model, prompt_version,
+                source_snapshot, content, generated_content, has_manual_edits, generation_notes,
                 report_type, period_start, period_end
-            ) VALUES (?, ?, ?, 'openai-compatible', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, 'openai-compatible', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             payload,
         )
@@ -607,7 +612,7 @@ def _build_commit_based_report(
 
     structured_summary = build_structured_summary(report_type, start_at, end_at, commit_summary_items)
     fallback = build_fallback_draft(report_type, structured_summary)
-    update_progress("llm", f"提交摘要已整理完成（新增 {generated_count} 条，本地复用 {len(commit_summary_items) - generated_count} 条），正在生成报告草稿。")
+    update_progress("llm", f"提交摘要已整理完成（新增 {generated_count} 条，本地复用 {len(commit_summary_items) - generated_count} 条），正在生成报告内容。")
     report_prompt = build_prompt(report_type, structured_summary)
     ai_content, llm_note = llm_client.generate_report(
         report_prompt,
@@ -616,7 +621,7 @@ def _build_commit_based_report(
             "repository_count": structured_summary["repository_count"],
         },
     )
-    draft_content = ai_content or fallback
+    generated_content = ai_content or fallback
     notes = [llm_note]
     notes.append(
         "提交流水线："
@@ -643,7 +648,7 @@ def _build_commit_based_report(
         end_at=end_at,
         llm_client=llm_client,
         structured_summary=structured_summary,
-        draft_content=draft_content,
+        generated_content=generated_content,
         notes=notes,
         auto_generated=auto_generated,
         overwrite_final=overwrite_final,
@@ -667,9 +672,9 @@ def _iter_daily_periods(start_at: datetime, end_at: datetime) -> list[tuple[date
 
 
 def _resolve_daily_report_content(report: dict) -> tuple[str, str]:
-    if report["final_content"].strip():
-        return report["final_content"], "final_content"
-    return report["draft_content"], "draft_content"
+    if report["has_manual_edits"]:
+        return report["content"], "content"
+    return report["generated_content"], "generated_content"
 
 
 def _ensure_daily_report_for_weekly(
@@ -740,7 +745,7 @@ def _build_weekly_report(
             {
                 "id": report["id"],
                 "title": report["title"],
-                "status": report["status"],
+                "has_manual_edits": report["has_manual_edits"],
                 "period_start": report["period_start"],
                 "content_source": content_source,
                 "content": content,
@@ -758,7 +763,7 @@ def _build_weekly_report(
             "repository_count": 0,
         },
     )
-    draft_content = ai_content or fallback
+    generated_content = ai_content or fallback
     notes = [llm_note]
     notes.append(
         "日报补齐："
@@ -780,7 +785,7 @@ def _build_weekly_report(
         end_at=end_at,
         llm_client=llm_client,
         structured_summary=structured_summary,
-        draft_content=draft_content,
+        generated_content=generated_content,
         notes=notes,
         auto_generated=auto_generated,
         overwrite_final=overwrite_final,
@@ -837,10 +842,7 @@ def get_report(conn: sqlite3.Connection, report_id: int) -> dict:
     row = conn.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
     if not row:
         raise KeyError(report_id)
-    item = dict(row)
-    item["auto_generated"] = bool(item["auto_generated"])
-    item["source_snapshot"] = json.loads(item["source_snapshot"])
-    return item
+    return _normalize_report_row(row)
 
 
 def list_reports(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
@@ -848,10 +850,4 @@ def list_reports(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
         "SELECT * FROM reports ORDER BY datetime(created_at) DESC, id DESC LIMIT ?",
         (limit,),
     ).fetchall()
-    items = []
-    for row in rows:
-        item = dict(row)
-        item["auto_generated"] = bool(item["auto_generated"])
-        item["source_snapshot"] = json.loads(item["source_snapshot"])
-        items.append(item)
-    return items
+    return [_normalize_report_row(row) for row in rows]
