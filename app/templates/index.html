@@ -1,0 +1,2641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Git 工作报告自动化</title>
+  <style>
+    :root {
+      --bg: #090b12;
+      --bg-soft: #111522;
+      --panel: rgba(12, 16, 27, 0.72);
+      --panel-strong: rgba(15, 20, 35, 0.92);
+      --panel-soft: rgba(17, 24, 39, 0.6);
+      --line: rgba(153, 167, 201, 0.16);
+      --line-strong: rgba(129, 140, 248, 0.34);
+      --ink: #f8fafc;
+      --muted: #9ca3b8;
+      --muted-strong: #c7d2fe;
+      --accent: #66a5ff;
+      --accent-strong: #7c5cff;
+      --accent-warm: #ffe18f;
+      --good: #34d399;
+      --bad: #fb7185;
+      --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at 50% 10%, rgba(93, 96, 255, 0.22), transparent 28%),
+        radial-gradient(circle at 42% 28%, rgba(59, 130, 246, 0.18), transparent 30%),
+        radial-gradient(circle at 58% 38%, rgba(16, 185, 129, 0.16), transparent 24%),
+        linear-gradient(180deg, #090b12 0%, #0b0d15 40%, #080a11 100%);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black 40%, transparent 92%);
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      left: 50%;
+      top: 15%;
+      width: 820px;
+      height: 820px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      background:
+        radial-gradient(circle, rgba(74, 222, 128, 0.09) 0%, rgba(59, 130, 246, 0.1) 32%, rgba(99, 102, 241, 0.14) 52%, transparent 72%);
+      filter: blur(30px);
+      opacity: 0.9;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      min-height: 44px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 11px 18px;
+      color: #f8fafc;
+      cursor: pointer;
+      font-weight: 700;
+      background: linear-gradient(135deg, rgba(86, 146, 255, 0.96), rgba(95, 75, 255, 0.96));
+      box-shadow: 0 14px 28px rgba(57, 103, 255, 0.28);
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 34px rgba(57, 103, 255, 0.34);
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible,
+    .report-item:focus-visible {
+      outline: 3px solid rgba(125, 211, 252, 0.32);
+      outline-offset: 2px;
+    }
+
+    button.secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(148, 163, 184, 0.18);
+      color: var(--ink);
+      box-shadow: none;
+      backdrop-filter: blur(14px);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 18px 0 40px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 10px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 18px;
+      margin-bottom: 18px;
+      background: rgba(7, 10, 18, 0.68);
+      border: 1px solid rgba(148, 163, 184, 0.08);
+      border-radius: 22px;
+      backdrop-filter: blur(18px);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: conic-gradient(from 180deg, #58d5ff, #7c5cff, #ff6bcb, #58d5ff);
+      box-shadow: 0 0 18px rgba(92, 134, 255, 0.45);
+    }
+
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: #090b12;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .topnav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .topnav .subpage-tab {
+      min-height: 44px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: transparent;
+      box-shadow: none;
+      color: rgba(241, 245, 249, 0.9);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .topnav .subpage-tab small {
+      display: none;
+    }
+
+    .topnav .subpage-tab.active,
+    .topnav .subpage-tab:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(148, 163, 184, 0.08);
+      color: #fff;
+      box-shadow: none;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .icon-bubble {
+      width: 38px;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      color: var(--muted-strong);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .avatar-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 6px 8px 6px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .avatar-chip strong {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #7c5cff, #4da7ff);
+      font-size: 13px;
+    }
+
+    .hero {
+      position: relative;
+      margin-bottom: 26px;
+      overflow: hidden;
+      border-radius: 34px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      background:
+        radial-gradient(circle at 50% 18%, rgba(99, 102, 241, 0.28), transparent 26%),
+        radial-gradient(circle at 41% 45%, rgba(34, 211, 238, 0.16), transparent 26%),
+        linear-gradient(180deg, rgba(10, 12, 19, 0.88), rgba(8, 10, 18, 0.95));
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+    }
+
+    body:not([data-active-page="overview"]) .hero {
+      display: none;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(circle at center, black 42%, transparent 92%);
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 72px 24px 54px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      color: #dbeafe;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(125, 211, 252, 0.12);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .hero h1 {
+      margin: 26px auto 14px;
+      max-width: 10ch;
+      font-size: clamp(46px, 8vw, 92px);
+      line-height: 0.94;
+      letter-spacing: -0.06em;
+      font-weight: 900;
+    }
+
+    .hero h1 .accent {
+      color: var(--accent-warm);
+      text-shadow: 0 0 22px rgba(255, 225, 143, 0.22);
+    }
+
+    .hero p {
+      max-width: 820px;
+      margin: 0 auto;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.8;
+    }
+
+    .hero-path {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(100%, 760px);
+      margin: 28px auto 20px;
+      padding: 10px 14px 10px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .hero-path strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      font-size: 15px;
+    }
+
+    .hero-path span {
+      color: #93c5fd;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 26px;
+    }
+
+    .hero-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0 auto 22px;
+      max-width: 980px;
+    }
+
+    .summary-pill {
+      padding: 16px 18px;
+      border-radius: 20px;
+      text-align: left;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      backdrop-filter: blur(14px);
+    }
+
+    .summary-pill strong {
+      display: block;
+      font-size: 30px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .summary-pill span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .subpage-tab {
+      min-height: 50px;
+      padding: 10px 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: none;
+      text-align: left;
+    }
+
+    .subpage-tab.active {
+      background: linear-gradient(135deg, rgba(87, 146, 255, 0.94), rgba(96, 89, 255, 0.94));
+      border-color: rgba(147, 197, 253, 0.28);
+      box-shadow: 0 18px 36px rgba(57, 103, 255, 0.24);
+    }
+
+    .subpage-tab small {
+      display: block;
+      margin-top: 2px;
+      color: rgba(226, 232, 240, 0.72);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .subtab-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .subtab-btn {
+      min-height: 42px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: none;
+      color: rgba(241, 245, 249, 0.88);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .subtab-btn.active {
+      background: linear-gradient(135deg, rgba(87, 146, 255, 0.92), rgba(96, 89, 255, 0.92));
+      border-color: rgba(147, 197, 253, 0.24);
+      box-shadow: 0 14px 28px rgba(57, 103, 255, 0.2);
+    }
+
+    .subtab-panel {
+      display: none;
+    }
+
+    .subtab-panel.active {
+      display: block;
+    }
+
+    .hero-meta {
+      display: grid;
+      gap: 14px;
+      max-width: 1020px;
+      margin: 0 auto;
+    }
+
+    .health-strip,
+    .provider-strip,
+    .toolbar,
+    .cluster-actions,
+    .candidate-item .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-chip,
+    .tag,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .status-chip.match,
+    .badge.match {
+      color: #dcfce7;
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.18);
+    }
+
+    .status-chip.miss,
+    .badge.miss {
+      color: #ffe4e6;
+      background: rgba(244, 63, 94, 0.12);
+      border-color: rgba(244, 63, 94, 0.18);
+    }
+
+    .provider-title {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .provider-logo {
+      min-width: 74px;
+      justify-content: center;
+      color: rgba(241, 245, 249, 0.9);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .info-box {
+      padding: 14px 16px;
+      border-radius: 16px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .info-box.success {
+      color: #ccfbf1;
+      background: rgba(20, 184, 166, 0.08);
+      border-color: rgba(20, 184, 166, 0.18);
+    }
+
+    .info-box.error {
+      color: #ffe4e6;
+      background: rgba(244, 63, 94, 0.08);
+      border-color: rgba(244, 63, 94, 0.18);
+    }
+
+    .page-view {
+      display: none;
+    }
+
+    .page-view.active {
+      display: block;
+    }
+
+    body[data-active-page="overview"] [data-page-view="overview"] .panel-grid {
+      display: none;
+    }
+
+    .panel-grid,
+    .config-grid,
+    .schedule-layout,
+    .studio {
+      display: grid;
+      gap: 20px;
+    }
+
+    .panel-grid {
+      grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.86fr);
+    }
+
+    .config-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(330px, 0.78fr);
+    }
+
+    .schedule-layout {
+      grid-template-columns: minmax(0, 1.04fr) minmax(320px, 0.76fr);
+    }
+
+    .studio {
+      grid-template-columns: 360px minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: var(--radius-xl);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow);
+    }
+
+    .workspace-panel,
+    .overview-panel,
+    .studio-panel {
+      padding: 24px;
+    }
+
+    .panel-header,
+    .collection-head,
+    .editor-head,
+    .hero-side-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .panel-header {
+      margin-bottom: 18px;
+    }
+
+    .panel-title,
+    h3 {
+      margin: 0;
+    }
+
+    .panel-title {
+      font-size: 24px;
+      letter-spacing: -0.03em;
+    }
+
+    .section-copy,
+    .muted,
+    .footer-note {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .section-copy {
+      margin-top: 6px;
+      font-size: 14px;
+    }
+
+    .insight-grid,
+    .overview-columns,
+    .hero-side-grid,
+    .hero-config-stats,
+    .row-2,
+    .row-3,
+    .checkbox-row {
+      display: grid;
+      gap: 12px;
+    }
+
+    .insight-grid,
+    .overview-columns,
+    .hero-config-stats,
+    .row-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .row-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .checkbox-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .insight,
+    .inline-section,
+    .preview-item,
+    .candidate-item,
+    .report-item,
+    .mini-card,
+    .schedule-card,
+    .editor-frame,
+    .job-frame {
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .insight {
+      padding: 18px;
+    }
+
+    .insight strong {
+      display: block;
+      font-size: 28px;
+      margin-bottom: 6px;
+    }
+
+    .inline-section,
+    .editor-frame,
+    .job-frame {
+      padding: 18px;
+    }
+
+    .stack,
+    .page-stack,
+    .collection,
+    .preview-list,
+    .candidate-list,
+    .report-list,
+    .report-sidebar,
+    .editor-column,
+    form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .collection,
+    .preview-list,
+    .candidate-list,
+    .report-list {
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-height: 46px;
+      padding: 12px 14px;
+      color: var(--ink);
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(12px);
+    }
+
+    textarea {
+      min-height: 420px;
+      resize: vertical;
+      line-height: 1.8;
+    }
+
+    .checkbox-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+      padding: 12px 14px;
+      margin: 0;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      color: #f8fafc;
+      font-size: 14px;
+    }
+
+    .checkbox-card input {
+      width: 18px;
+      min-height: auto;
+      margin: 0;
+    }
+
+    details.module {
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    details.module[open] {
+      border-color: rgba(129, 140, 248, 0.2);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    summary.module-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      list-style: none;
+      cursor: pointer;
+    }
+
+    summary.module-head::-webkit-details-marker {
+      display: none;
+    }
+
+    .module-meta {
+      display: grid;
+      gap: 4px;
+    }
+
+    .module-meta strong {
+      font-size: 17px;
+    }
+
+    .module-hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .module-count {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted-strong);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .module-body {
+      padding: 0 20px 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .report-item,
+    .mini-card,
+    .preview-item,
+    .candidate-item,
+    .schedule-card {
+      padding: 15px 16px;
+    }
+
+    .report-item {
+      cursor: pointer;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .report-item:hover {
+      transform: translateY(-1px);
+      border-color: rgba(96, 165, 250, 0.28);
+    }
+
+    .report-item.active {
+      background: rgba(87, 146, 255, 0.12);
+      border-color: rgba(96, 165, 250, 0.38);
+      box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.08);
+    }
+
+    .empty-state {
+      padding: 18px;
+      border-radius: 16px;
+      color: var(--muted);
+      border: 1px dashed rgba(148, 163, 184, 0.16);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(12px);
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: min(720px, 100%);
+      max-height: min(88vh, 920px);
+      overflow: auto;
+      padding: 22px;
+      border-radius: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(11, 16, 29, 0.96);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.5);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      vertical-align: top;
+    }
+
+    .status-success {
+      color: #86efac;
+    }
+
+    .status-error {
+      color: #fda4af;
+    }
+
+    .editor-meta {
+      margin-top: 10px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    @media (max-width: 1200px) {
+      .panel-grid,
+      .config-grid,
+      .schedule-layout,
+      .studio {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 860px) {
+      .shell {
+        width: min(100% - 20px, 1480px);
+      }
+
+      .topbar,
+      .panel-header,
+      .collection-head,
+      .editor-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero-inner {
+        padding: 52px 18px 36px;
+      }
+
+      .hero h1 {
+        font-size: clamp(40px, 14vw, 72px);
+      }
+
+      .hero-summary,
+      .insight-grid,
+      .overview-columns,
+      .hero-config-stats,
+      .row-2,
+      .row-3,
+      .checkbox-row {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-path {
+        display: grid;
+        text-align: left;
+        border-radius: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <strong>Git 工作报告站</strong>
+          <span>统一的日报与调度控制台</span>
+        </div>
+      </div>
+
+      <nav class="topnav" aria-label="主导航">
+        <button class="subpage-tab active" type="button" data-page-tab="overview" onclick="switchPage('overview')">总览首页<small>看整体健康度与资产概况</small></button>
+        <button class="subpage-tab" type="button" data-page-tab="config" onclick="switchPage('config')">资源配置<small>仓库、作者、模型集中维护</small></button>
+        <button class="subpage-tab" type="button" data-page-tab="schedule" onclick="switchPage('schedule')">调度中心<small>统一管理自动生成节奏</small></button>
+        <button class="subpage-tab" type="button" data-page-tab="summaries" onclick="switchPage('summaries')">摘要中心<small>查看与生成提交摘要</small></button>
+        <button class="subpage-tab" type="button" data-page-tab="reports" onclick="switchPage('reports')">报告中心<small>历史记录、编辑与定稿</small></button>
+      </nav>
+
+      <div class="top-actions">
+        <span class="icon-bubble" aria-hidden="true">◎</span>
+        <span class="icon-bubble" aria-hidden="true">◫</span>
+        <span class="icon-bubble" aria-hidden="true">⌘</span>
+        <span class="avatar-chip"><strong>H</strong>Harden</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="eyebrow">统一的 Git 工作报告接口网关</div>
+        <h1>统一的 <span class="accent">Git</span> 工作报告控制台</h1>
+        <p>把多个本地仓库、作者识别、LLM 配置、自动调度和报告定稿收束到同一个容器页面里，用更稳定的流程把零散提交变成可审阅、可复用、可自动化的工作输出。</p>
+
+        <div class="hero-path">
+          <strong>http://127.0.0.1:8000/api/dashboard</strong>
+          <span>/reports /schedules /settings</span>
+        </div>
+
+        <div class="hero-actions">
+          <button type="button" onclick="switchPage('reports')">立即生成日报</button>
+          <button class="secondary" type="button" onclick="switchPage('schedule')">执行调度检查</button>
+        </div>
+
+        <div class="hero-summary">
+          <div class="summary-pill"><strong id="repoCount">0</strong><span>已接入仓库</span></div>
+          <div class="summary-pill"><strong id="aliasCount">0</strong><span>作者映射</span></div>
+          <div class="summary-pill"><strong id="reportCount">0</strong><span>报告记录</span></div>
+          <div class="summary-pill"><strong id="jobCount">0</strong><span>最近调度</span></div>
+        </div>
+
+        <div class="hero-meta">
+          <div class="health-strip" id="heroPipelineStatus"></div>
+          <div class="info-box" id="heroWorkspaceSummary">先加载仪表盘数据，随后会在这里提示当前流程是否完整。</div>
+          <div class="provider-title">支持的核心能力模块</div>
+          <div class="provider-strip">
+            <span class="provider-logo tag">Git</span>
+            <span class="provider-logo tag">LLM</span>
+            <span class="provider-logo tag">日报</span>
+            <span class="provider-logo tag">周报</span>
+            <span class="provider-logo tag">月报</span>
+            <span class="provider-logo tag">总结</span>
+            <span class="provider-logo tag">Scheduler</span>
+            <span class="provider-logo tag">SQLite</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-view active" data-page-view="overview">
+      <div class="panel-grid">
+        <div class="card overview-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">总览首页</h2>
+              <div class="section-copy">这里对齐参考图的中心化入口感，但下面保留真正可用的系统总览，让页面既像产品首页，也能承担后台入口。</div>
+            </div>
+            <span class="tag" id="heroSchedulerHealthChip">等待数据</span>
+          </div>
+
+          <div class="page-stack">
+            <div class="insight-grid">
+              <div class="insight">
+                <strong id="insightReadyCount">0</strong>
+                <span class="muted">已满足生成前置条件</span>
+              </div>
+              <div class="insight">
+                <strong id="insightPendingCount">0</strong>
+                <span class="muted">仍待补齐的环节</span>
+              </div>
+            </div>
+
+            <div class="info-box" id="overviewNarrative">当仓库、作者和模型配置逐步完善后，这里会给出更明确的运行建议。</div>
+
+            <div class="overview-columns">
+              <section class="inline-section">
+                <div class="collection-head">
+                  <h3>仓库清单</h3>
+                  <span class="tag" id="repoOverviewCount">0 项</span>
+                </div>
+                <div class="collection" id="repoList"></div>
+              </section>
+
+              <section class="inline-section">
+                <div class="collection-head">
+                  <h3>作者映射</h3>
+                  <span class="tag" id="aliasOverviewCount">0 项</span>
+                </div>
+                <div class="collection" id="aliasList"></div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <aside class="card overview-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">快捷生成</h2>
+              <div class="section-copy">保持参考图那种首页 CTA 感，但直接连到真实生成流程。</div>
+            </div>
+            <span class="tag">快速入口</span>
+          </div>
+
+          <div class="stack">
+            <button type="button" data-generate-button onclick="generateReport('daily')">生成日报</button>
+            <button type="button" data-generate-button onclick="generateReport('weekly')">生成周报</button>
+            <button type="button" data-generate-button onclick="generateReport('monthly')">生成月报</button>
+            <button type="button" data-generate-button onclick="generateReport('summary')">生成工作总结</button>
+            <button class="secondary" type="button" onclick="switchPage('reports')">进入报告中心</button>
+            <button class="secondary" type="button" onclick="switchPage('config')">进入资源配置</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="page-view" data-page-view="config">
+      <div class="config-grid">
+        <div class="card workspace-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">资源配置</h2>
+              <div class="section-copy">深色玻璃风格下继续保留仓库、作者、模型三类核心资源的分组维护。</div>
+            </div>
+            <span class="tag">资源层</span>
+          </div>
+
+          <div class="subtab-bar" aria-label="资源配置子标签">
+            <button class="subtab-btn active" type="button" data-config-tab="repositories" onclick="switchConfigTab('repositories')">仓库接入</button>
+            <button class="subtab-btn" type="button" data-config-tab="aliases" onclick="switchConfigTab('aliases')">作者识别</button>
+            <button class="subtab-btn" type="button" data-config-tab="llm" onclick="switchConfigTab('llm')">模型配置</button>
+          </div>
+
+          <div class="stack">
+            <div class="subtab-panel active" data-config-panel="repositories">
+              <details class="module" open>
+                <summary class="module-head">
+                  <div class="module-meta">
+                    <strong>仓库接入</strong>
+                    <span class="module-hint">默认先看已保存仓库，再按需通过弹窗新增或验证</span>
+                  </div>
+                  <span class="module-count" id="repoModuleCount">0 个仓库</span>
+                </summary>
+                <div class="module-body">
+                  <div class="section-actions">
+                    <button type="button" onclick="openModal('repoModal')">新增仓库</button>
+                  </div>
+                  <div class="collection" id="repoSavedList"></div>
+                </div>
+              </details>
+            </div>
+
+            <div class="subtab-panel" data-config-panel="aliases">
+              <details class="module" open>
+                <summary class="module-head">
+                  <div class="module-meta">
+                    <strong>作者识别</strong>
+                    <span class="module-hint">默认先看已保存映射，再通过弹窗新增或自动发现候选作者</span>
+                  </div>
+                  <span class="module-count" id="aliasModuleCount">0 个映射</span>
+                </summary>
+                <div class="module-body">
+                  <div class="section-actions">
+                    <button type="button" onclick="openModal('aliasModal')">新增作者映射</button>
+                    <button class="secondary" type="button" onclick="discoverAliases()">自动获取候选</button>
+                  </div>
+                  <div class="collection" id="aliasSavedList"></div>
+                  <div class="info-box" id="aliasDiscoveryResult">可以手动添加，也可以从已配置仓库中自动发现近期作者。</div>
+                  <div class="candidate-list" id="aliasCandidateList"></div>
+                </div>
+              </details>
+            </div>
+
+            <div class="subtab-panel" data-config-panel="llm">
+              <details class="module" open>
+                <summary class="module-head">
+                  <div class="module-meta">
+                    <strong>模型配置</strong>
+                    <span class="module-hint">维护网关地址、模型名、时区和鉴权信息</span>
+                  </div>
+                  <span class="module-count" id="llmModuleStatus">未检测</span>
+                </summary>
+                <div class="module-body">
+                  <form id="llmForm">
+                    <div>
+                      <label>Base URL</label>
+                      <input name="llm_base_url" placeholder="https://api.openai.com/v1" />
+                    </div>
+                    <div class="row-2">
+                      <div>
+                        <label>Model</label>
+                        <input name="llm_model" placeholder="gpt-4o-mini" />
+                      </div>
+                      <div>
+                        <label>Timezone</label>
+                        <input name="timezone" placeholder="Asia/Shanghai" />
+                      </div>
+                    </div>
+                    <div>
+                      <label>API Key</label>
+                      <input name="llm_api_key" placeholder="sk-..." />
+                    </div>
+                    <div class="row-2">
+                      <div>
+                        <label>日报超时（秒）</label>
+                        <input name="llm_report_timeout_seconds" type="number" min="10" max="600" placeholder="45" />
+                      </div>
+                      <div>
+                        <label>提交摘要超时（秒）</label>
+                        <input name="llm_commit_summary_timeout_seconds" type="number" min="10" max="600" placeholder="30" />
+                      </div>
+                    </div>
+                    <div class="row-2">
+                      <button class="secondary" type="button" onclick="testLlmSettings()">检测连接</button>
+                      <button type="submit">保存配置</button>
+                    </div>
+                  </form>
+                  <div class="info-box" id="llmTestResult">填写配置后可以先点“检测连接”，确认接口可用再保存。若只有日报阶段超时，可优先提高“日报超时”；若单条提交经常超时，再提高“提交摘要超时”。</div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <aside class="card overview-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">模型与环境</h2>
+              <div class="section-copy">把 LLM 配置独立成右侧副面板，风格上贴近参考图的网关配置体验。</div>
+            </div>
+            <span class="tag" id="llmModuleStatusBadge">未检测</span>
+          </div>
+
+          <div class="stack">
+            <section class="inline-section">
+              <h3>流程配置</h3>
+              <div class="info-box" id="workspaceSummary">先加载仪表盘数据，随后会按从上到下的流程展示必需项与可选项。</div>
+              <div class="footer-note">必须流程</div>
+              <div class="health-strip" id="pipelineStatus"></div>
+              <div class="footer-note">可选流程</div>
+              <div class="health-strip" id="optionalPipelineStatus"></div>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="page-view" data-page-view="schedule">
+      <div class="schedule-layout">
+        <div class="card workspace-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">调度中心</h2>
+              <div class="section-copy">自动化规则单独成页，仍然是深色控制台，但更适合持续维护运行节奏。</div>
+            </div>
+            <span class="tag" id="scheduleModuleCount">0 条规则</span>
+          </div>
+
+          <div class="stack">
+            <div class="schedule-grid" id="scheduleList"></div>
+            <div class="footer-note">`weekday` 使用 0-6 表示周一到周日；月度任务使用 `day_of_month`。每日任务只需设置时间。</div>
+          </div>
+        </div>
+
+        <aside class="card overview-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">调度状态</h2>
+              <div class="section-copy">用右侧状态区判断当前自动生成链路是否稳定。</div>
+            </div>
+            <span class="tag" id="scheduleHealthChip">等待数据</span>
+          </div>
+
+          <div class="stack">
+            <div class="info-box" id="scheduleSummaryBox">调度数据加载后，这里会提示启用情况与最近执行结果。</div>
+            <section class="job-frame">
+              <div class="collection-head">
+                <h3>最近调度日志</h3>
+                <span class="tag" id="jobOverviewCount">0 条</span>
+              </div>
+              <div id="jobList"></div>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="page-view" data-page-view="summaries">
+      <div class="card studio-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">摘要中心</h2>
+            <div class="section-copy">集中查看已生成的提交摘要，并支持按日期筛选或补生成当天摘要。</div>
+          </div>
+          <span class="tag" id="summaryCenterCount">0 条摘要</span>
+        </div>
+
+        <div class="toolbar" style="margin-bottom: 18px;">
+          <div style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap;">
+            <div>
+              <label for="summaryDateInput">摘要日期</label>
+              <input id="summaryDateInput" type="date" />
+            </div>
+            <button class="secondary" type="button" onclick="loadCommitSummaries()">按日期筛选</button>
+            <button type="button" onclick="generateCommitSummariesForSelectedDate()">生成当天摘要</button>
+            <button class="secondary" type="button" onclick="clearSummaryDateFilter()">清空筛选</button>
+          </div>
+        </div>
+
+        <div class="info-box" id="summaryStatusBox">选择日期后可以筛选当天摘要，也可以先生成当天摘要。</div>
+        <div class="collection" id="summaryList" style="margin-top: 16px;"></div>
+      </div>
+    </section>
+
+    <section class="page-view" data-page-view="reports">
+        <div class="card studio-panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">报告中心</h2>
+              <div class="section-copy">保持参考图的统一深色体验，同时把历史记录与定稿编辑拉成真正能工作的内容子页。</div>
+            </div>
+            <span class="tag" id="selectedReportStatus">未选择报告</span>
+          </div>
+
+          <div class="toolbar" style="margin-bottom: 18px;">
+            <div style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap;">
+              <div>
+                <label for="dailyReportDateInput">日报日期</label>
+                <input id="dailyReportDateInput" type="date" />
+              </div>
+              <button type="button" data-generate-button onclick="generateReport('daily')">生成日报</button>
+            </div>
+            <button type="button" data-generate-button onclick="generateReport('weekly')">生成周报</button>
+            <button type="button" data-generate-button onclick="generateReport('monthly')">生成月报</button>
+          </div>
+
+          <div class="info-box" id="reportGenerationStatusBox">当前没有正在进行的报告生成任务。</div>
+
+          <div class="studio">
+          <aside class="report-sidebar">
+            <section class="inline-section">
+              <div class="collection-head">
+                <h3>历史报告</h3>
+                <span class="tag" id="reportOverviewCount">0 条</span>
+              </div>
+              <div class="toolbar" style="margin-bottom: 12px;">
+                <button class="secondary" type="button" onclick="clearReports()">清空历史</button>
+              </div>
+              <div class="stack" style="margin-bottom: 14px;">
+                <div class="row-2">
+                  <div>
+                    <label>报告类型</label>
+                    <select id="reportTypeFilter" onchange="renderReportList()">
+                      <option value="all">全部类型</option>
+                      <option value="daily">日报</option>
+                      <option value="weekly">周报</option>
+                      <option value="monthly">月报</option>
+                      <option value="summary">总结</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>报告状态</label>
+                    <select id="reportStatusFilter" onchange="renderReportList()">
+                      <option value="all">全部状态</option>
+                      <option value="draft">草稿</option>
+                      <option value="final">已定稿</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label>时间范围</label>
+                  <select id="reportTimeFilter" onchange="renderReportList()">
+                    <option value="30d">最近 30 天</option>
+                    <option value="7d">最近 7 天</option>
+                    <option value="90d">最近 90 天</option>
+                    <option value="all">全部时间</option>
+                  </select>
+                </div>
+              </div>
+              <div class="report-list" id="reportList"></div>
+            </section>
+          </aside>
+
+          <div class="editor-column">
+            <section class="editor-frame">
+              <div class="editor-head">
+                <div>
+                  <h2 id="editorTitle">报告编辑器</h2>
+                  <div class="section-copy">先在左侧选择记录，再载入草稿或直接编辑定稿。</div>
+                </div>
+                <div class="toolbar">
+                  <button class="secondary" type="button" onclick="fillDraft()">载入草稿</button>
+                  <button class="secondary" type="button" onclick="regenerateSelectedDailyReport()">重新生成日报</button>
+                  <button class="secondary" type="button" onclick="deleteSelectedReport()">删除当前报告</button>
+                  <button class="secondary" type="button" onclick="deleteSelectedReportWithSummaries()">删除当前报告和摘要</button>
+                  <button type="button" onclick="saveReport()">保存定稿</button>
+                </div>
+              </div>
+              <textarea id="reportEditor" placeholder="选择一条报告后即可编辑"></textarea>
+              <div class="footer-note editor-meta" id="reportMeta">当前未选择报告。</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal" id="repoModal" onclick="if (event.target === this) closeModal('repoModal')">
+    <div class="modal-card">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title" id="repoModalTitle">新增仓库</h2>
+          <div class="section-copy" id="repoModalCopy">通过弹窗完成新增与验证，主页面默认只展示已保存仓库。</div>
+        </div>
+        <button class="secondary" type="button" onclick="closeModal('repoModal')">关闭</button>
+      </div>
+      <form id="repoForm">
+        <div class="row-2">
+          <div>
+            <label>仓库名称</label>
+            <input name="name" placeholder="例如：my-service" required />
+          </div>
+          <div>
+            <label>仓库路径</label>
+            <input name="path" placeholder="C:\project\repo" required />
+          </div>
+        </div>
+        <div>
+          <label>备注</label>
+          <input name="notes" placeholder="例如：主业务仓库 / 仅统计后端提交" />
+        </div>
+        <div class="checkbox-row">
+          <label class="checkbox-card"><input type="checkbox" name="exclude_merge_commits" checked /> 排除 merge commit</label>
+          <label class="checkbox-card"><input type="checkbox" name="exclude_bots" checked /> 排除机器人提交</label>
+        </div>
+        <div class="row-2">
+          <button class="secondary" type="button" onclick="validateRepository()">验证仓库</button>
+          <button type="submit" id="repoSubmitButton">验证后添加</button>
+        </div>
+      </form>
+      <div class="info-box" id="repoValidationResult">先输入仓库路径，再点“验证仓库”确认当前目录确实是可访问的 git 仓库。</div>
+      <div class="preview-list" id="repoPreviewList"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="aliasModal" onclick="if (event.target === this) closeModal('aliasModal')">
+    <div class="modal-card">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">新增作者映射</h2>
+          <div class="section-copy">作者映射现在按仓库维护，避免不同仓库之间共用全局作者配置。</div>
+          </div>
+          <button class="secondary" type="button" onclick="closeModal('aliasModal')">关闭</button>
+        </div>
+      <form id="aliasForm">
+        <div>
+          <label>所属仓库</label>
+          <select name="repository_id" required></select>
+        </div>
+        <div>
+          <label>归一作者名</label>
+          <input name="canonical_name" placeholder="例如：张三" required />
+        </div>
+        <div class="row-2">
+          <div>
+            <label>别名姓名</label>
+            <input name="alias_name" placeholder="例如：zhangsan" />
+          </div>
+          <div>
+            <label>别名邮箱</label>
+            <input name="alias_email" placeholder="例如：me@company.com" />
+          </div>
+        </div>
+        <div class="row-2">
+          <button class="secondary" type="button" onclick="discoverAliases()">自动获取候选</button>
+          <button type="submit">添加仓库作者映射</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let dashboard = null;
+    let selectedReport = null;
+    let activePage = "overview";
+    let activeConfigTab = "repositories";
+    let editingRepositoryId = null;
+    let generationPollTimer = null;
+    let latestGenerationStatus = null;
+    let commitSummaries = [];
+    window.aliasCandidates = [];
+
+    function setText(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    }
+
+    function setHtml(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.innerHTML = value;
+    }
+
+    function setClassName(id, value) {
+      const node = document.getElementById(id);
+      if (node) node.className = value;
+    }
+
+    function openModal(id) {
+      const node = document.getElementById(id);
+      if (node) node.classList.add("open");
+    }
+
+    function closeModal(id) {
+      const node = document.getElementById(id);
+      if (node) node.classList.remove("open");
+      if (id === "repoModal") {
+        resetRepoFormMode();
+      }
+    }
+
+    function switchPage(page) {
+      activePage = page;
+      document.body.setAttribute("data-active-page", page);
+      document.querySelectorAll("[data-page-tab]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.pageTab === page);
+      });
+      document.querySelectorAll("[data-page-view]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.pageView === page);
+      });
+    }
+
+    function switchConfigTab(tab) {
+      activeConfigTab = tab;
+      document.querySelectorAll("[data-config-tab]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.configTab === tab);
+      });
+      document.querySelectorAll("[data-config-panel]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.configPanel === tab);
+      });
+    }
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "请求失败");
+      }
+      return response.json();
+    }
+
+    async function loadDashboard() {
+      dashboard = await api("/api/dashboard");
+      latestGenerationStatus = await api("/api/reports/generation-status");
+      await loadCommitSummaries(false);
+      if (selectedReport) {
+        const stillExists = dashboard.reports.find((report) => report.id === selectedReport.id);
+        if (!stillExists) {
+          selectedReport = null;
+        }
+      }
+      renderDashboard();
+    }
+
+    function renderDashboard() {
+      setText("repoCount", dashboard.repositories.length);
+      setText("aliasCount", dashboard.aliases.length);
+      setText("reportCount", dashboard.reports.length);
+      setText("jobCount", dashboard.recent_jobs.length);
+
+      setText("repoModuleCount", `${dashboard.repositories.length} 个仓库`);
+      setText("aliasModuleCount", `${dashboard.aliases.length} 个映射`);
+      setText("scheduleModuleCount", `${dashboard.schedules.length} 条规则`);
+      setText("repoOverviewCount", `${dashboard.repositories.length} 项`);
+      setText("aliasOverviewCount", `${dashboard.aliases.length} 项`);
+      setText("reportOverviewCount", `${dashboard.reports.length} 条`);
+      setText("jobOverviewCount", `${dashboard.recent_jobs.length} 条`);
+
+      renderWorkspaceSummary();
+      renderRepoList();
+      renderAliasList();
+      renderReportList();
+      renderJobList();
+      renderScheduleList();
+      fillAliasRepositoryOptions();
+      fillLlmSettings();
+      renderGenerationStatus();
+      updateEditorMeta();
+      switchPage(activePage);
+      switchConfigTab(activeConfigTab);
+    }
+
+    function ensureDailyReportDateDefault() {
+      const input = document.getElementById("dailyReportDateInput");
+      if (!input || input.value) return;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      input.value = `${year}-${month}-${day}`;
+    }
+
+    function ensureSummaryDateDefault() {
+      const input = document.getElementById("summaryDateInput");
+      if (!input || input.value) return;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      input.value = `${year}-${month}-${day}`;
+    }
+
+    function buildDailyPeriodPayload() {
+      const input = document.getElementById("dailyReportDateInput");
+      if (!input || !input.value) {
+        return {};
+      }
+      const selectedDate = input.value.trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+        throw new Error("日报日期格式不正确，请重新选择。");
+      }
+      return {
+        period_start: `${selectedDate}T00:00:00`,
+        period_end: `${selectedDate}T23:59:59`,
+      };
+    }
+
+    function getConfiguredTimezone() {
+      return dashboard?.llm_settings?.timezone || "Asia/Shanghai";
+    }
+
+    function parseServerDateTime(value) {
+      if (!value || typeof value !== "string") return null;
+      const normalized = value.includes("T")
+        ? value
+        : value.includes(" ")
+          ? value.replace(" ", "T") + "Z"
+          : value;
+      const parsed = new Date(normalized);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function formatDateTimeForDisplay(value) {
+      const parsed = parseServerDateTime(value);
+      if (!parsed) return value || "-";
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: getConfiguredTimezone(),
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(parsed).replace(/\//g, "-");
+    }
+
+    function formatMonthGroup(value) {
+      const parsed = parseServerDateTime(value);
+      if (!parsed) return "更早";
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: getConfiguredTimezone(),
+        year: "numeric",
+        month: "2-digit",
+      }).format(parsed).replace("/", "-");
+    }
+
+    function findExistingDailyReportByDate(selectedDate) {
+      if (!dashboard || !dashboard.reports || !selectedDate) return null;
+      return dashboard.reports.find((report) =>
+        report.report_type === "daily" &&
+        typeof report.period_start === "string" &&
+        report.period_start.startsWith(selectedDate)
+      ) || null;
+    }
+
+    function renderCommitSummaries() {
+      const target = document.getElementById("summaryList");
+      const statusBox = document.getElementById("summaryStatusBox");
+      const selectedDate = document.getElementById("summaryDateInput")?.value?.trim() || "";
+      setText("summaryCenterCount", `${commitSummaries.length} 条摘要`);
+      if (!target || !statusBox) return;
+      if (!commitSummaries.length) {
+        target.innerHTML = "<div class='empty-state'>当前条件下还没有摘要记录。你可以选择一个日期后点击“生成当天摘要”。</div>";
+        statusBox.className = "info-box";
+        statusBox.textContent = selectedDate
+          ? `当前没有 ${selectedDate} 的摘要记录。`
+          : "当前还没有摘要记录。";
+        return;
+      }
+      statusBox.className = "info-box success";
+      statusBox.textContent = selectedDate
+        ? `已加载 ${selectedDate} 的 ${commitSummaries.length} 条摘要记录。`
+        : `已加载最近 ${commitSummaries.length} 条摘要记录。`;
+      target.innerHTML = commitSummaries.map((item) => `
+        <div class="mini-card">
+          <div class="cluster-actions">
+            <span class="badge">${item.repository}</span>
+            <span class="badge">${item.commit_hash.slice(0, 8)}</span>
+          </div>
+          <strong>${item.subject || "(无提交标题)"}</strong>
+          <div class="muted">${formatDateTimeForDisplay(item.authored_at)} · ${item.author_name}</div>
+          <div class="footer-note">${item.generated_summary}</div>
+          <div class="muted">${item.changed_files && item.changed_files.length ? item.changed_files.slice(0, 4).join(", ") : "无文件列表"}</div>
+        </div>
+      `).join("");
+    }
+
+    async function loadCommitSummaries(showAlert = false) {
+      const selectedDate = document.getElementById("summaryDateInput")?.value?.trim() || "";
+      const query = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : "";
+      commitSummaries = await api(`/api/commit-summaries${query}`);
+      renderCommitSummaries();
+      if (showAlert) {
+        alert(selectedDate ? `已筛选 ${selectedDate} 的摘要记录` : "已加载摘要记录");
+      }
+    }
+
+    async function generateCommitSummariesForSelectedDate() {
+      const selectedDate = document.getElementById("summaryDateInput")?.value?.trim() || "";
+      if (!selectedDate) {
+        return alert("请先选择一个日期。");
+      }
+      const result = await api("/api/commit-summaries/generate", {
+        method: "POST",
+        body: JSON.stringify({ date: selectedDate }),
+      });
+      commitSummaries = result.summaries || [];
+      renderCommitSummaries();
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      const statusBox = document.getElementById("summaryStatusBox");
+      const summaryText = `当天提交共 ${result.total_commits} 条，新增摘要 ${result.generated_count} 条，复用摘要 ${result.reused_count} 条。`;
+      if (errors.length) {
+        if (statusBox) {
+          statusBox.className = "info-box warning";
+          statusBox.textContent = `${summaryText} 仓库读取异常：${errors.join("；")}`;
+        }
+        return alert(`${summaryText}\n\n仓库读取异常：\n${errors.join("\n")}`);
+      }
+      if (statusBox) {
+        statusBox.className = "info-box success";
+        statusBox.textContent = summaryText;
+      }
+      alert(summaryText);
+    }
+
+    function clearSummaryDateFilter() {
+      const input = document.getElementById("summaryDateInput");
+      if (input) {
+        input.value = "";
+      }
+      loadCommitSummaries();
+    }
+
+    function setGenerationButtonsDisabled(disabled) {
+      document.querySelectorAll("[data-generate-button]").forEach((node) => {
+        node.disabled = disabled;
+      });
+    }
+
+    function renderGenerationStatus() {
+      const status = latestGenerationStatus || { is_running: false, detail: "" };
+      const target = document.getElementById("reportGenerationStatusBox");
+      if (!target) return;
+      if (status.is_running) {
+        target.className = "info-box";
+        target.textContent = `正在生成 ${status.report_type || "报告"}：${status.detail || "任务进行中..."}`;
+      } else if (status.error) {
+        target.className = "info-box error";
+        target.textContent = `最近一次生成失败：${status.error}`;
+      } else if (status.finished_at) {
+        target.className = "info-box success";
+        target.textContent = `最近一次生成已完成：${status.detail || "报告已生成完成。"}${status.report_id ? ` 报告 ID：${status.report_id}` : ""}`;
+      } else {
+        target.className = "info-box";
+        target.textContent = "当前没有正在进行的报告生成任务。";
+      }
+      setGenerationButtonsDisabled(Boolean(status.is_running));
+    }
+
+    async function refreshGenerationStatus() {
+      latestGenerationStatus = await api("/api/reports/generation-status");
+      renderGenerationStatus();
+      return latestGenerationStatus;
+    }
+
+    function stopGenerationPolling() {
+      if (generationPollTimer) {
+        clearInterval(generationPollTimer);
+        generationPollTimer = null;
+      }
+    }
+
+    function startGenerationPolling() {
+      stopGenerationPolling();
+      generationPollTimer = setInterval(async () => {
+        try {
+          const status = await refreshGenerationStatus();
+          if (!status.is_running) {
+            stopGenerationPolling();
+          }
+        } catch (_) {
+          stopGenerationPolling();
+        }
+      }, 1200);
+    }
+
+    function renderWorkspaceSummary() {
+      const repoReady = dashboard.repositories.length > 0;
+      const aliasReady = dashboard.aliases.length > 0;
+      const llmReady = Boolean(dashboard.llm_settings.llm_base_url && dashboard.llm_settings.llm_model);
+      const enabledSchedules = dashboard.schedules.filter((item) => item.is_enabled).length;
+      const lastJob = dashboard.recent_jobs[0];
+      const requiredReadyStates = [repoReady, aliasReady, llmReady];
+      const readyCount = requiredReadyStates.filter(Boolean).length;
+      const pendingCount = requiredReadyStates.length - readyCount;
+      const scheduleReady = enabledSchedules > 0;
+
+      setText("insightReadyCount", readyCount);
+      setText("insightPendingCount", pendingCount);
+
+      const requiredStepHtml = [
+        { ok: repoReady, label: repoReady ? "第 1 步：仓库已接入" : "第 1 步：先添加仓库" },
+        { ok: aliasReady, label: aliasReady ? "第 2 步：作者映射已配置" : "第 2 步：补充仓库作者映射" },
+        { ok: llmReady, label: llmReady ? "第 3 步：LLM 参数已填写" : "第 3 步：填写 LLM 配置" },
+      ].map((item) => `
+        <span class="status-chip ${item.ok ? "match" : "miss"}">${item.ok ? "就绪" : "待补齐"} · ${item.label}</span>
+      `).join("");
+
+      const optionalStepHtml = [
+        { ok: scheduleReady, label: scheduleReady ? `调度已启用 ${enabledSchedules} 条` : "调度未启用，可按需开启自动生成" },
+      ].map((item) => `
+        <span class="status-chip ${item.ok ? "match" : "miss"}">${item.ok ? "已开启" : "可选"} · ${item.label}</span>
+      `).join("");
+
+      setHtml("heroPipelineStatus", requiredStepHtml);
+      setHtml("pipelineStatus", requiredStepHtml);
+      setHtml("optionalPipelineStatus", optionalStepHtml);
+
+      const summaryMessage = readyCount === 3
+        ? scheduleReady
+          ? "必须流程已全部完成，当前可以直接生成报告，也可以交给调度自动运行。"
+          : "必须流程已全部完成，当前可以直接生成报告；如果需要自动运行，再按需开启调度。"
+        : readyCount >= 1
+          ? "必须流程还未完成，建议按“仓库 -> 作者 -> LLM”的顺序从上到下补齐。"
+          : "当前仍处于初始化阶段，请先完成仓库、作者和 LLM 这三项必须配置。";
+
+      if (readyCount === 3) {
+        setClassName("heroWorkspaceSummary", "info-box success");
+        setClassName("workspaceSummary", "info-box success");
+      } else if (readyCount >= 1) {
+        setClassName("heroWorkspaceSummary", "info-box");
+        setClassName("workspaceSummary", "info-box");
+      } else {
+        setClassName("heroWorkspaceSummary", "info-box error");
+        setClassName("workspaceSummary", "info-box error");
+      }
+
+      setText("heroWorkspaceSummary", summaryMessage);
+      setText("workspaceSummary", summaryMessage);
+
+      const overviewNarrative = document.getElementById("overviewNarrative");
+      const scheduleSummaryBox = document.getElementById("scheduleSummaryBox");
+      if (lastJob) {
+        overviewNarrative.className = `info-box ${lastJob.status === "success" ? "success" : "error"}`;
+        overviewNarrative.textContent = `最近一次调度结果：${lastJob.job_name} · ${lastJob.status} · ${lastJob.message}`;
+        if (scheduleSummaryBox) {
+          scheduleSummaryBox.className = `info-box ${lastJob.status === "success" ? "success" : "error"}`;
+          scheduleSummaryBox.textContent = `最近执行：${lastJob.job_name}，状态 ${lastJob.status}。${enabledSchedules > 0 ? `当前启用 ${enabledSchedules} 条调度规则。` : "当前还没有启用中的调度规则。"}`;
+        }
+      } else {
+        overviewNarrative.className = "info-box";
+        overviewNarrative.textContent = "还没有调度执行记录。你可以先手动生成报告，或点击顶部按钮立即检查一次调度任务。";
+        if (scheduleSummaryBox) {
+          scheduleSummaryBox.className = "info-box";
+          scheduleSummaryBox.textContent = enabledSchedules > 0
+            ? `当前启用 ${enabledSchedules} 条调度规则，但还没有执行记录。`
+            : "还没有调度执行记录，也没有启用中的调度规则。";
+        }
+      }
+
+      const healthText = !lastJob
+        ? "未运行"
+        : lastJob.status === "success"
+          ? "最近调度成功"
+          : "最近调度异常";
+      setText("heroSchedulerHealthChip", healthText);
+      setText("scheduleHealthChip", healthText);
+      setText("llmModuleStatus", llmReady ? "配置已填写" : "待完善");
+      setText("llmModuleStatusBadge", llmReady ? "配置已填写" : "待完善");
+    }
+
+    function renderRepoList() {
+      const html = !dashboard.repositories.length
+        ? "<div class='empty-state'>还没有配置仓库。建议先在资源配置页接入至少一个 git 仓库。</div>"
+        : dashboard.repositories.map((repo) => `
+        <div class="mini-card">
+          <strong>${repo.name}</strong>
+          <div class="muted">${repo.path}</div>
+          <div class="footer-note">${repo.notes || "无备注"}</div>
+          <div class="cluster-actions">
+            <span class="badge">${repo.exclude_merge_commits ? "排除 merge" : "保留 merge"}</span>
+            <span class="badge">${repo.exclude_bots ? "排除 bot" : "保留 bot"}</span>
+            <button class="secondary" type="button" onclick="editRepository(${repo.id})">编辑</button>
+            <button class="secondary" type="button" onclick="validateSavedRepository(${repo.id})">验证</button>
+            <button class="secondary" type="button" onclick="deleteRepository(${repo.id})">删除</button>
+          </div>
+        </div>
+      `).join("");
+      setHtml("repoList", html);
+      setHtml("repoSavedList", html);
+    }
+
+    function fillAliasRepositoryOptions(selectedRepositoryId = "") {
+      const form = document.getElementById("aliasForm");
+      const select = form?.repository_id;
+      if (!select) return;
+      if (!dashboard.repositories.length) {
+        select.innerHTML = `<option value="">请先添加仓库</option>`;
+        select.disabled = true;
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = dashboard.repositories.map((repo) => `
+        <option value="${repo.id}" ${String(selectedRepositoryId) === String(repo.id) ? "selected" : ""}>${repo.name}</option>
+      `).join("");
+    }
+
+    function resetRepoFormMode() {
+      editingRepositoryId = null;
+      setText("repoModalTitle", "新增仓库");
+      setText("repoModalCopy", "通过弹窗完成新增与验证，主页面默认只展示已保存仓库。");
+      setText("repoSubmitButton", "验证后添加");
+    }
+
+    function fillRepoForm(repository = null) {
+      const form = document.getElementById("repoForm");
+      if (!form) return;
+      form.name.value = repository?.name || "";
+      form.path.value = repository?.path || "";
+      form.notes.value = repository?.notes || "";
+      form.exclude_merge_commits.checked = repository ? Boolean(repository.exclude_merge_commits) : true;
+      form.exclude_bots.checked = repository ? Boolean(repository.exclude_bots) : true;
+    }
+
+    function editRepository(repositoryId) {
+      const repository = dashboard.repositories.find((item) => item.id === repositoryId);
+      if (!repository) {
+        return alert("未找到对应仓库。");
+      }
+      editingRepositoryId = repository.id;
+      setText("repoModalTitle", `编辑仓库：${repository.name}`);
+      setText("repoModalCopy", "可以修改仓库名称、路径、备注和过滤规则，保存前也可以先重新验证。");
+      setText("repoSubmitButton", "保存修改");
+      fillRepoForm(repository);
+      renderRepoValidationResult(true, `正在编辑仓库 ${repository.name}，如修改了路径，建议先重新验证。`);
+      renderRepoPreview(null);
+      openModal("repoModal");
+    }
+
+    function renderAliasList() {
+      const html = !dashboard.aliases.length
+        ? "<div class='empty-state'>还没有配置作者映射。可以手动添加，也可以在资源配置页一键扫描候选作者。</div>"
+        : dashboard.aliases.map((item) => `
+        <div class="mini-card">
+          <strong>${item.canonical_name}</strong>
+          <div class="muted">所属仓库：${item.repository_name}</div>
+          <div class="muted">姓名别名：${item.alias_name || "-"}</div>
+          <div class="muted">邮箱别名：${item.alias_email || "-"}</div>
+          <div class="cluster-actions">
+            <span class="badge">${item.repository_name}</span>
+            <button class="secondary" type="button" onclick="deleteAlias(${item.id})">删除</button>
+          </div>
+        </div>
+      `).join("");
+      setHtml("aliasList", html);
+      setHtml("aliasSavedList", html);
+    }
+
+    function renderAliasDiscoveryResult(ok, message) {
+      const target = document.getElementById("aliasDiscoveryResult");
+      target.className = `info-box ${ok ? "success" : "error"}`;
+      target.textContent = message;
+    }
+
+    function renderAliasCandidates(items) {
+      const target = document.getElementById("aliasCandidateList");
+      window.aliasCandidates = items || [];
+      if (!items || !items.length) {
+        target.innerHTML = "";
+        return;
+      }
+      target.innerHTML = items.map((item, index) => `
+        <div class="candidate-item">
+          <strong>${item.canonical_name}</strong>
+          <div class="muted">仓库：${item.repository_name}</div>
+          <div class="muted">姓名：${item.alias_name || "-"}</div>
+          <div class="muted">邮箱：${item.alias_email || "-"}</div>
+          <div class="muted">近期待提交数：${item.commit_count}</div>
+          <div class="actions">
+            <button class="secondary" type="button" onclick="useAliasCandidate(${index})">一键填入</button>
+            <button type="button" onclick="saveAliasCandidate(${index})">直接添加</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function getReportTypeLabel(reportType) {
+      return {
+        daily: "日报",
+        weekly: "周报",
+        monthly: "月报",
+        summary: "总结",
+      }[reportType] || reportType;
+    }
+
+    function getFilteredReports() {
+      const typeFilter = document.getElementById("reportTypeFilter")?.value || "all";
+      const statusFilter = document.getElementById("reportStatusFilter")?.value || "all";
+      const timeFilter = document.getElementById("reportTimeFilter")?.value || "30d";
+      const now = new Date();
+      const windowDays = {
+        "7d": 7,
+        "30d": 30,
+        "90d": 90,
+      }[timeFilter];
+
+      return dashboard.reports.filter((report) => {
+        if (typeFilter !== "all" && report.report_type !== typeFilter) {
+          return false;
+        }
+        if (statusFilter !== "all" && report.status !== statusFilter) {
+          return false;
+        }
+        if (windowDays) {
+          const createdAt = parseServerDateTime(report.created_at);
+          if (!createdAt) {
+            return false;
+          }
+          const diffMs = now - createdAt;
+          if (diffMs > windowDays * 24 * 60 * 60 * 1000) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    function renderReportList() {
+      const target = document.getElementById("reportList");
+      const reports = getFilteredReports()
+        .slice()
+        .sort((a, b) => {
+          if (a.status !== b.status) {
+            return a.status === "draft" ? -1 : 1;
+          }
+          return (parseServerDateTime(b.created_at)?.getTime() || 0) - (parseServerDateTime(a.created_at)?.getTime() || 0);
+        });
+
+      setText("reportOverviewCount", `${reports.length} 条`);
+
+      if (!dashboard.reports.length) {
+        target.innerHTML = "<div class='empty-state'>还没有报告记录。点击首页上的生成按钮后，会自动进入这里进行编辑。</div>";
+        return;
+      }
+      if (!reports.length) {
+        target.innerHTML = "<div class='empty-state'>当前筛选条件下没有报告记录。可以切换类型、状态或时间范围再看看。</div>";
+        return;
+      }
+
+      const grouped = reports.reduce((acc, report) => {
+        const key = formatMonthGroup(report.created_at);
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(report);
+        return acc;
+      }, {});
+
+      target.innerHTML = Object.entries(grouped).map(([group, items]) => `
+        <div style="margin-bottom: 16px;">
+          <div class="collection-head" style="margin-bottom: 10px;">
+            <h3>${group}</h3>
+            <span class="tag">${items.length} 条</span>
+          </div>
+          ${items.map((report) => `
+            <div class="report-item ${selectedReport && selectedReport.id === report.id ? "active" : ""}" onclick="selectReport(${report.id})" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectReport(${report.id});}">
+              <div class="tag">${getReportTypeLabel(report.report_type)}</div>
+              <strong>${report.title}</strong>
+              <div class="muted">${formatDateTimeForDisplay(report.created_at)}</div>
+              <div class="footer-note">${report.status === "final" ? "已定稿" : "草稿待整理"}</div>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
+    }
+
+    function renderJobList() {
+      const target = document.getElementById("jobList");
+      if (!dashboard.recent_jobs.length) {
+        target.innerHTML = "<div class='empty-state'>暂无调度日志。手动触发一次调度后，这里会展示最近运行结果。</div>";
+        return;
+      }
+      target.innerHTML = "<table><thead><tr><th>任务</th><th>状态</th><th>时间</th><th>说明</th></tr></thead><tbody>" +
+        dashboard.recent_jobs.map((job) => `
+          <tr>
+            <td>${job.job_name}</td>
+            <td class="${job.status === "success" ? "status-success" : "status-error"}">${job.status}</td>
+            <td>${formatDateTimeForDisplay(job.created_at)}</td>
+            <td>${job.message}</td>
+          </tr>
+        `).join("") +
+        "</tbody></table>";
+    }
+
+    function renderScheduleList() {
+      const target = document.getElementById("scheduleList");
+      if (!dashboard.schedules.length) {
+        target.innerHTML = "<div class='empty-state'>当前没有调度规则。</div>";
+        return;
+      }
+      target.innerHTML = dashboard.schedules.map((item) => `
+        <form class="schedule-card" onsubmit="event.preventDefault(); saveSchedule(${item.id}, this)">
+          <div class="row-2">
+            <div>
+              <label>报告类型</label>
+              <input name="report_type" value="${item.report_type}" readonly />
+            </div>
+            <div>
+              <label>是否启用</label>
+              <select name="is_enabled">
+                <option value="true" ${item.is_enabled ? "selected" : ""}>启用</option>
+                <option value="false" ${!item.is_enabled ? "selected" : ""}>停用</option>
+              </select>
+            </div>
+          </div>
+          <div class="row-3">
+            <div>
+              <label>频率</label>
+              <select name="cadence">
+                <option value="daily" ${item.cadence === "daily" ? "selected" : ""}>daily</option>
+                <option value="weekly" ${item.cadence === "weekly" ? "selected" : ""}>weekly</option>
+                <option value="monthly" ${item.cadence === "monthly" ? "selected" : ""}>monthly</option>
+              </select>
+            </div>
+            <div>
+              <label>hour</label>
+              <input name="hour" type="number" min="0" max="23" value="${item.hour}" />
+            </div>
+            <div>
+              <label>minute</label>
+              <input name="minute" type="number" min="0" max="59" value="${item.minute}" />
+            </div>
+          </div>
+          <div class="row-2">
+            <div>
+              <label>weekday</label>
+              <input name="weekday" type="number" min="0" max="6" value="${item.weekday ?? ""}" />
+            </div>
+            <div>
+              <label>day_of_month</label>
+              <input name="day_of_month" type="number" min="1" max="31" value="${item.day_of_month ?? ""}" />
+            </div>
+          </div>
+          <div class="footer-note">最近执行：${item.last_run_at ? formatDateTimeForDisplay(item.last_run_at) : "暂无"}</div>
+          <button type="submit">保存调度</button>
+        </form>
+      `).join("");
+    }
+
+    function fillLlmSettings() {
+      const form = document.getElementById("llmForm");
+      Object.entries(dashboard.llm_settings).forEach(([key, value]) => {
+        if (form[key]) form[key].value = value || "";
+      });
+    }
+
+    function updateEditorMeta() {
+      const title = document.getElementById("editorTitle");
+      const meta = document.getElementById("reportMeta");
+      const statusChip = document.getElementById("selectedReportStatus");
+      const editor = document.getElementById("reportEditor");
+
+      if (!selectedReport) {
+        title.textContent = "报告编辑器";
+        meta.textContent = "当前未选择报告。";
+        statusChip.textContent = "未选择报告";
+        editor.value = "";
+        return;
+      }
+
+      title.textContent = selectedReport.title;
+      meta.textContent = `类型：${selectedReport.report_type} | 状态：${selectedReport.status} | 备注：${selectedReport.generation_notes}`;
+      statusChip.textContent = selectedReport.status === "final" ? "当前为已定稿" : "当前为草稿";
+    }
+
+    async function generateReport(reportType) {
+      if (latestGenerationStatus?.is_running) {
+        return alert("当前已有报告正在生成，请等待本次任务完成。");
+      }
+      try {
+        if (reportType === "daily") {
+          const dailyPayload = buildDailyPeriodPayload();
+          const selectedDate = dailyPayload.period_start ? dailyPayload.period_start.slice(0, 10) : "";
+          const existingReport = findExistingDailyReportByDate(selectedDate);
+          if (existingReport) {
+            switchPage("reports");
+            await selectReport(existingReport.id);
+            return alert(`当天日报已存在，已为你打开 ${selectedDate} 的日报。`);
+          }
+        }
+        const payload = {
+          report_type: reportType,
+          overwrite_final: false,
+          ...(reportType === "daily" ? buildDailyPeriodPayload() : {}),
+        };
+        switchPage("reports");
+        latestGenerationStatus = {
+          is_running: true,
+          report_type: reportType,
+          stage: "prepare",
+          detail: "正在提交生成任务。",
+          error: "",
+          report_id: null,
+          finished_at: null,
+        };
+        renderGenerationStatus();
+        startGenerationPolling();
+        const report = await api("/api/reports/generate", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        await refreshGenerationStatus();
+        stopGenerationPolling();
+        await loadDashboard();
+        await selectReport(report.id);
+        alert("报告生成完成");
+      } catch (error) {
+        try {
+          await refreshGenerationStatus();
+        } catch (_) {
+          latestGenerationStatus = {
+            is_running: false,
+            error: error.message,
+            detail: "生成失败。",
+            finished_at: null,
+          };
+          renderGenerationStatus();
+        }
+        stopGenerationPolling();
+        alert(error.message);
+      }
+    }
+
+    async function selectReport(reportId) {
+      selectedReport = await api(`/api/reports/${reportId}`);
+      renderReportList();
+      document.getElementById("reportEditor").value = selectedReport.final_content || selectedReport.draft_content;
+      if (selectedReport.report_type === "daily") {
+        const input = document.getElementById("dailyReportDateInput");
+        if (input && selectedReport.period_start) {
+          input.value = selectedReport.period_start.slice(0, 10);
+        }
+      }
+      updateEditorMeta();
+    }
+
+    function fillDraft() {
+      if (!selectedReport) return alert("请先选择一条报告");
+      document.getElementById("reportEditor").value = selectedReport.draft_content;
+    }
+
+    async function saveReport() {
+      if (!selectedReport) return alert("请先选择一条报告");
+      const finalContent = document.getElementById("reportEditor").value;
+      selectedReport = await api(`/api/reports/${selectedReport.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ final_content: finalContent, status: "final" }),
+      });
+      await loadDashboard();
+      alert("已保存定稿");
+    }
+
+    async function regenerateSelectedDailyReport() {
+      if (!selectedReport) return alert("请先选择一条报告");
+      if (selectedReport.report_type !== "daily") {
+        return alert("当前仅支持在单条日报中重新生成日报。");
+      }
+      if (latestGenerationStatus?.is_running) {
+        return alert("当前已有报告正在生成，请等待本次任务完成。");
+      }
+      const confirmed = confirm(`确认重新生成 ${selectedReport.period_start.slice(0, 10)} 的日报吗？现有草稿会被刷新，已定稿内容会保留。`);
+      if (!confirmed) return;
+      try {
+        switchPage("reports");
+        latestGenerationStatus = {
+          is_running: true,
+          report_type: "daily",
+          stage: "prepare",
+          detail: "正在重新生成所选日报。",
+          error: "",
+          report_id: selectedReport.id,
+          finished_at: null,
+        };
+        renderGenerationStatus();
+        startGenerationPolling();
+        const report = await api("/api/reports/generate", {
+          method: "POST",
+          body: JSON.stringify({
+            report_type: "daily",
+            period_start: selectedReport.period_start,
+            period_end: selectedReport.period_end,
+            overwrite_final: false,
+          }),
+        });
+        await refreshGenerationStatus();
+        stopGenerationPolling();
+        await loadDashboard();
+        await selectReport(report.id);
+        alert("日报已重新生成");
+      } catch (error) {
+        try {
+          await refreshGenerationStatus();
+        } catch (_) {
+          latestGenerationStatus = {
+            is_running: false,
+            error: error.message,
+            detail: "重新生成失败。",
+            finished_at: null,
+          };
+          renderGenerationStatus();
+        }
+        stopGenerationPolling();
+        alert(error.message);
+      }
+    }
+
+    async function deleteSelectedReport() {
+      if (!selectedReport) return alert("请先选择一条报告");
+      const confirmed = confirm(`确认删除报告《${selectedReport.title}》吗？此操作不会删除提交摘要缓存。`);
+      if (!confirmed) return;
+      await api(`/api/reports/${selectedReport.id}`, { method: "DELETE" });
+      selectedReport = null;
+      document.getElementById("reportEditor").value = "";
+      await loadDashboard();
+      updateEditorMeta();
+      alert("报告已删除");
+    }
+
+    async function deleteSelectedReportWithSummaries() {
+      if (!selectedReport) return alert("请先选择一条报告");
+      const extraNote = selectedReport.report_type === "daily"
+        ? "这会同时删除该日报对应日期的提交摘要缓存。"
+        : "当前报告类型不会关联删除提交摘要缓存，只会删除当前报告。";
+      const confirmed = confirm(`确认删除报告《${selectedReport.title}》和摘要吗？${extraNote}`);
+      if (!confirmed) return;
+      const result = await api(`/api/reports/${selectedReport.id}/with-summaries`, { method: "DELETE" });
+      selectedReport = null;
+      document.getElementById("reportEditor").value = "";
+      await loadDashboard();
+      updateEditorMeta();
+      alert(`报告已删除，同时删除 ${result.deleted_summary_count} 条摘要缓存`);
+    }
+
+    async function clearReports() {
+      if (!dashboard.reports.length) return alert("当前没有可清空的历史报告。");
+      const confirmed = confirm("确认清空所有历史报告吗？此操作不会删除提交摘要缓存。");
+      if (!confirmed) return;
+      const result = await api("/api/reports", { method: "DELETE" });
+      selectedReport = null;
+      document.getElementById("reportEditor").value = "";
+      await loadDashboard();
+      updateEditorMeta();
+      alert(`历史报告已清空，共删除 ${result.deleted_count} 条记录`);
+    }
+
+    async function deleteRepository(id) {
+      await api(`/api/repositories/${id}`, { method: "DELETE" });
+      await loadDashboard();
+    }
+
+    async function deleteAlias(id) {
+      await api(`/api/aliases/${id}`, { method: "DELETE" });
+      await loadDashboard();
+    }
+
+    async function saveSchedule(id, form) {
+      const payload = {
+        report_type: form.report_type.value,
+        is_enabled: form.is_enabled.value === "true",
+        cadence: form.cadence.value,
+        hour: Number(form.hour.value),
+        minute: Number(form.minute.value),
+        weekday: form.weekday.value ? Number(form.weekday.value) : null,
+        day_of_month: form.day_of_month.value ? Number(form.day_of_month.value) : null,
+      };
+      await api(`/api/schedules/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      await loadDashboard();
+      alert("调度已保存");
+    }
+
+    async function runSchedulerNow() {
+      await api("/api/scheduler/run", { method: "POST" });
+      await loadDashboard();
+      switchPage("schedule");
+      alert("已触发一次调度检查");
+    }
+
+    function currentRepoPayload() {
+      const form = document.getElementById("repoForm");
+      return {
+        name: form.name.value.trim(),
+        path: form.path.value.trim(),
+        is_enabled: true,
+        exclude_merge_commits: form.exclude_merge_commits.checked,
+        exclude_bots: form.exclude_bots.checked,
+        notes: form.notes.value.trim(),
+      };
+    }
+
+    function renderRepoValidationResult(ok, message) {
+      const target = document.getElementById("repoValidationResult");
+      target.className = `info-box ${ok ? "success" : "error"}`;
+      target.textContent = message;
+    }
+
+    function renderRepoPreview(result) {
+      const target = document.getElementById("repoPreviewList");
+      if (!result || !result.preview_commits || !result.preview_commits.length) {
+        target.innerHTML = "";
+        return;
+      }
+      const summary = `<div class="info-box ${result.matched_count > 0 ? "success" : "error"}">最近预览到 ${result.preview_count} 条提交，其中命中作者映射 ${result.matched_count} 条。</div>`;
+      const items = result.preview_commits.map((commit) => `
+        <div class="preview-item">
+          <div>
+            <span class="badge">${commit.commit_hash}</span>
+            <span class="badge ${commit.matched ? "match" : "miss"}">${commit.matched ? "已匹配" : "未匹配"}</span>
+          </div>
+          <strong>${commit.subject || "(无提交标题)"}</strong>
+          <div class="muted">${commit.author_name} &lt;${commit.author_email}&gt;</div>
+          <div class="muted">${commit.authored_at}</div>
+        </div>
+      `).join("");
+      target.innerHTML = summary + items;
+    }
+
+    async function validateRepository() {
+      const payload = currentRepoPayload();
+      if (!payload.path) {
+        return renderRepoValidationResult(false, "请先填写仓库路径。");
+      }
+      try {
+        renderRepoValidationResult(true, "正在验证仓库路径，请稍候...");
+        const result = await api("/api/repositories/validate", {
+          method: "POST",
+          body: JSON.stringify({ path: payload.path, limit: 5 }),
+        });
+        const detail = result.resolved_path
+          ? `${result.message}，解析路径：${result.resolved_path}`
+          : result.message;
+        renderRepoValidationResult(result.ok, detail);
+        renderRepoPreview(result);
+      } catch (error) {
+        renderRepoValidationResult(false, error.message);
+        renderRepoPreview(null);
+      }
+    }
+
+    async function validateSavedRepository(repositoryId) {
+      const repository = dashboard.repositories.find((item) => item.id === repositoryId);
+      if (!repository) {
+        return alert("未找到对应仓库。");
+      }
+      try {
+        editingRepositoryId = repository.id;
+        setText("repoModalTitle", `编辑仓库：${repository.name}`);
+        setText("repoModalCopy", "可以修改仓库名称、路径、备注和过滤规则，保存前也可以先重新验证。");
+        setText("repoSubmitButton", "保存修改");
+        openModal("repoModal");
+        fillRepoForm(repository);
+        renderRepoValidationResult(true, `正在验证仓库 ${repository.name}，请稍候...`);
+        const result = await api("/api/repositories/validate", {
+          method: "POST",
+          body: JSON.stringify({ path: repository.path, limit: 5 }),
+        });
+        const detail = result.resolved_path
+          ? `${result.message}，解析路径：${result.resolved_path}`
+          : result.message;
+        renderRepoValidationResult(result.ok, detail);
+        renderRepoPreview(result);
+      } catch (error) {
+        renderRepoValidationResult(false, error.message);
+        renderRepoPreview(null);
+      }
+    }
+
+    async function discoverAliases() {
+      try {
+        renderAliasDiscoveryResult(true, "正在扫描已配置仓库中的近期作者，请稍候...");
+        const result = await api("/api/aliases/discover");
+        if (!result.items.length) {
+          renderAliasDiscoveryResult(false, "没有发现新的作者候选。可能是仓库还没配置，或现有作者都已经映射过了。");
+          renderAliasCandidates([]);
+          return;
+        }
+        renderAliasDiscoveryResult(true, `发现 ${result.items.length} 个新的作者候选，可一键填入或直接添加。`);
+        renderAliasCandidates(result.items);
+      } catch (error) {
+        renderAliasDiscoveryResult(false, error.message);
+        renderAliasCandidates([]);
+      }
+    }
+
+    function useAliasCandidate(index) {
+      const item = (window.aliasCandidates || [])[index];
+      if (!item) return;
+      const form = document.getElementById("aliasForm");
+      fillAliasRepositoryOptions(item.repository_id || "");
+      form.repository_id.value = item.repository_id || "";
+      form.canonical_name.value = item.canonical_name || "";
+      form.alias_name.value = item.alias_name || "";
+      form.alias_email.value = item.alias_email || "";
+      renderAliasDiscoveryResult(true, "候选作者已填入表单，可先检查后再保存。");
+    }
+
+    async function saveAliasCandidate(index) {
+      const item = (window.aliasCandidates || [])[index];
+      if (!item) return;
+      try {
+        await api("/api/aliases", {
+          method: "POST",
+          body: JSON.stringify({
+            repository_id: item.repository_id,
+            canonical_name: item.canonical_name,
+            alias_name: item.alias_name,
+            alias_email: item.alias_email,
+          }),
+        });
+        renderAliasDiscoveryResult(true, `已添加作者映射：${item.canonical_name}`);
+        await loadDashboard();
+        await discoverAliases();
+      } catch (error) {
+        renderAliasDiscoveryResult(false, error.message);
+      }
+    }
+
+    function currentLlmPayload() {
+      const form = document.getElementById("llmForm");
+      return {
+        llm_base_url: form.llm_base_url.value.trim(),
+        llm_model: form.llm_model.value.trim(),
+        llm_api_key: form.llm_api_key.value.trim(),
+        timezone: form.timezone.value.trim() || "Asia/Shanghai",
+        llm_report_timeout_seconds: Number(form.llm_report_timeout_seconds.value || 45),
+        llm_commit_summary_timeout_seconds: Number(form.llm_commit_summary_timeout_seconds.value || 30),
+      };
+    }
+
+    function renderLlmTestResult(ok, message) {
+      const target = document.getElementById("llmTestResult");
+      target.className = `info-box ${ok ? "success" : "error"}`;
+      target.textContent = message;
+    }
+
+    async function testLlmSettings() {
+      const payload = currentLlmPayload();
+      try {
+        renderLlmTestResult(true, "正在检测 LLM 连接，请稍候...");
+        const result = await api("/api/settings/llm/test", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        renderLlmTestResult(result.ok, result.message);
+      } catch (error) {
+        renderLlmTestResult(false, error.message);
+      }
+    }
+
+    document.getElementById("repoForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const payload = currentRepoPayload();
+      try {
+        const validation = await api("/api/repositories/validate", {
+          method: "POST",
+          body: JSON.stringify({ path: payload.path, limit: 5 }),
+        });
+        if (!validation.ok) {
+          renderRepoPreview(validation);
+          return renderRepoValidationResult(false, validation.message);
+        }
+        renderRepoValidationResult(
+          true,
+          validation.resolved_path
+            ? `${validation.message}，解析路径：${validation.resolved_path}`
+            : validation.message
+        );
+        renderRepoPreview(validation);
+        const isEditing = Boolean(editingRepositoryId);
+        if (editingRepositoryId) {
+          await api(`/api/repositories/${editingRepositoryId}`, { method: "PUT", body: JSON.stringify(payload) });
+        } else {
+          await api("/api/repositories", { method: "POST", body: JSON.stringify(payload) });
+        }
+        form.reset();
+        form.exclude_merge_commits.checked = true;
+        form.exclude_bots.checked = true;
+        resetRepoFormMode();
+        renderRepoValidationResult(true, isEditing ? "仓库已验证并更新成功。" : "仓库已验证并保存成功。");
+        renderRepoPreview(null);
+        closeModal("repoModal");
+        await loadDashboard();
+      } catch (error) {
+        renderRepoValidationResult(false, error.message);
+        renderRepoPreview(null);
+        alert(error.message);
+      }
+    });
+
+    document.getElementById("aliasForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const payload = {
+        repository_id: Number(form.repository_id.value),
+        canonical_name: form.canonical_name.value,
+        alias_name: form.alias_name.value,
+        alias_email: form.alias_email.value,
+      };
+      try {
+        await api("/api/aliases", { method: "POST", body: JSON.stringify(payload) });
+        form.reset();
+        renderAliasDiscoveryResult(true, "作者映射已添加。");
+        closeModal("aliasModal");
+        await loadDashboard();
+        await discoverAliases();
+      } catch (error) {
+        renderAliasDiscoveryResult(false, error.message);
+        alert(error.message);
+      }
+    });
+
+    document.getElementById("llmForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = currentLlmPayload();
+      try {
+        await api("/api/settings/llm", { method: "PUT", body: JSON.stringify(payload) });
+        await loadDashboard();
+        renderLlmTestResult(true, "配置已保存。建议先点“检测连接”确认当前网关和模型可用。");
+        alert("LLM 配置已保存");
+      } catch (error) {
+        renderLlmTestResult(false, error.message);
+        alert(error.message);
+      }
+    });
+
+    document.body.setAttribute("data-active-page", activePage);
+    switchConfigTab(activeConfigTab);
+    ensureDailyReportDateDefault();
+    ensureSummaryDateDefault();
+    loadDashboard();
+  </script>
+</body>
+</html>
