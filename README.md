@@ -13,24 +13,27 @@
 - 在后台页面中查看、编辑、保存报告
 - 支持手动生成和后台定时自动生成
 
+## 界面预览
+
+### 总览首页
+
+![总览首页](docs/screenshots/overview.png)
+
+### 资源配置
+
+![资源配置](docs/screenshots/config.png)
+
+### 报告中心
+
+![报告中心](docs/screenshots/reports.png)
+
 ## 快速开始
 
-### 方式一：直接双击启动
-
-直接双击 [run_app.bat](/C:/Users/Lenovo/Documents/git_report/run_app.bat) 即可。
-
-它会自动：
-
-- 创建 `.venv` 虚拟环境
-- 安装/更新依赖
-- 启动 FastAPI 服务
-- 自动打开浏览器到 `http://127.0.0.1:8000`
-
-适合日常直接使用。
-
-### 方式二：命令行启动
+### 方式一：命令行启动
 
 1. 创建虚拟环境并安装依赖：
+
+Windows PowerShell：
 
 ```powershell
 python -m venv .venv
@@ -38,15 +41,45 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+macOS Terminal：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 2. 启动服务：
 
-```powershell
+```bash
 uvicorn app.main:app --reload
 ```
 
 3. 打开浏览器访问：
 
 `http://127.0.0.1:8000`
+
+### 方式二：双击启动
+
+Windows：
+
+- 双击 [run_app.bat](run_app.bat)
+
+macOS：
+
+- 双击 [run_app.command](run_app.command)
+- 如果首次打开被系统拦截，可在“系统设置 -> 隐私与安全性”中允许执行，或先运行：
+
+```bash
+chmod +x run_app.command
+```
+
+这两个脚本都会自动：
+
+- 创建 `.venv` 虚拟环境
+- 安装/更新依赖
+- 启动 FastAPI 服务
+- 自动打开浏览器到 `http://127.0.0.1:8000`
 
 ## 环境变量
 
@@ -63,5 +96,7 @@ uvicorn app.main:app --reload
 ## 说明
 
 - 当前版本只处理本地可访问仓库，不负责自动 clone/pull。
+- 当前版本面向 macOS 和 Windows 桌面环境使用。
 - 若目标仓库存在 `safe.directory` 限制，页面校验与采集接口会返回错误说明。
+- “选择文件夹”按钮依赖本机桌面 Python 环境；如果无法打开系统选择器，也可以直接手动填写仓库路径。
 - 若未配置 LLM 或调用失败，系统会返回规则生成的兜底内容，并记录分阶段错误信息、超时信息和 prompt 规模提示。

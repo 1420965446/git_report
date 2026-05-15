@@ -2563,7 +2563,7 @@
         renderRepoValidationResult(true, "正在打开文件夹选择器...");
         const result = await api("/api/system/select-directory");
         if (!result.ok || !result.path) {
-          renderRepoValidationResult(false, "未选择文件夹。");
+          renderRepoValidationResult(false, "未选择文件夹，可继续手动填写路径。");
           return;
         }
 
@@ -2575,7 +2575,7 @@
         }
         renderRepoValidationResult(true, `已选择目录：${result.path}`);
       } catch (error) {
-        renderRepoValidationResult(false, error.message);
+        renderRepoValidationResult(false, `${error.message}，你也可以手动填写仓库路径。`);
         alert(error.message);
       }
     }
