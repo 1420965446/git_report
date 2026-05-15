@@ -504,6 +504,42 @@
       letter-spacing: 0.02em;
     }
 
+    .schedule-tab-copy {
+      margin-bottom: 16px;
+    }
+
+    .schedule-tab-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .schedule-tab-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .schedule-tab-header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .path-picker-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .path-picker-row button {
+      min-width: 120px;
+    }
+
     .status-chip,
     .tag,
     .badge {
@@ -884,6 +920,14 @@
       box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.08);
     }
 
+    .schedule-panel {
+      display: none;
+    }
+
+    .schedule-panel.active {
+      display: block;
+    }
+
     .empty-state {
       padding: 18px;
       border-radius: 16px;
@@ -1004,6 +1048,10 @@
         text-align: left;
         border-radius: 22px;
       }
+
+      .path-picker-row {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -1014,16 +1062,16 @@
         <div class="brand-mark" aria-hidden="true"></div>
         <div>
           <strong>Git 工作报告站</strong>
-          <span>统一的日报与调度控制台</span>
+          <span>统一管理仓库、调度与报告</span>
         </div>
       </div>
 
       <nav class="topnav" aria-label="主导航">
         <button class="subpage-tab active" type="button" data-page-tab="overview" onclick="switchPage('overview')">总览首页<small>看整体健康度与资产概况</small></button>
         <button class="subpage-tab" type="button" data-page-tab="config" onclick="switchPage('config')">资源配置<small>仓库、作者、模型集中维护</small></button>
+        <button class="subpage-tab" type="button" data-page-tab="reports" onclick="switchPage('reports')">报告中心<small>历史记录、编辑与保存</small></button>
         <button class="subpage-tab" type="button" data-page-tab="schedule" onclick="switchPage('schedule')">调度中心<small>统一管理自动生成节奏</small></button>
         <button class="subpage-tab" type="button" data-page-tab="summaries" onclick="switchPage('summaries')">摘要中心<small>查看与生成提交摘要</small></button>
-        <button class="subpage-tab" type="button" data-page-tab="reports" onclick="switchPage('reports')">报告中心<small>历史记录、编辑与保存</small></button>
       </nav>
 
       <div class="top-actions">
@@ -1036,9 +1084,9 @@
 
     <section class="hero">
       <div class="hero-inner">
-        <div class="eyebrow">统一的 Git 工作报告接口网关</div>
+        <div class="eyebrow">Git 工作报告中心</div>
         <h1>统一的 <span class="accent">Git</span> 工作报告控制台</h1>
-        <p>把多个本地仓库、作者识别、LLM 配置、自动调度和报告保存收束到同一个容器页面里，用更稳定的流程把零散提交变成可审阅、可复用、可自动化的工作输出。</p>
+        <p>集中管理本地仓库、作者映射、模型配置、自动调度和报告内容。</p>
 
         <div class="hero-path">
           <strong>http://127.0.0.1:8000/api/dashboard</strong>
@@ -1059,8 +1107,8 @@
 
         <div class="hero-meta">
           <div class="health-strip" id="heroPipelineStatus"></div>
-          <div class="info-box" id="heroWorkspaceSummary">先加载仪表盘数据，随后会在这里提示当前流程是否完整。</div>
-          <div class="provider-title">支持的核心能力模块</div>
+          <div class="info-box" id="heroWorkspaceSummary">正在加载当前工作区状态。</div>
+          <div class="provider-title">核心能力</div>
           <div class="provider-strip">
             <span class="provider-logo tag">Git</span>
             <span class="provider-logo tag">LLM</span>
@@ -1081,7 +1129,7 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">总览首页</h2>
-              <div class="section-copy">这里对齐参考图的中心化入口感，但下面保留真正可用的系统总览，让页面既像产品首页，也能承担后台入口。</div>
+              <div class="section-copy">查看仓库、作者映射、模型配置和报告产出的整体状态。</div>
             </div>
             <span class="tag" id="heroSchedulerHealthChip">等待数据</span>
           </div>
@@ -1098,7 +1146,7 @@
               </div>
             </div>
 
-            <div class="info-box" id="overviewNarrative">当仓库、作者和模型配置逐步完善后，这里会给出更明确的运行建议。</div>
+            <div class="info-box" id="overviewNarrative">这里会显示最近的调度状态和建议。</div>
 
             <div class="overview-columns">
               <section class="inline-section">
@@ -1124,7 +1172,7 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">快捷生成</h2>
-              <div class="section-copy">保持参考图那种首页 CTA 感，但直接连到真实生成流程。</div>
+              <div class="section-copy">常用操作入口，支持快速生成报告和进入调度检查。</div>
             </div>
             <span class="tag">快速入口</span>
           </div>
@@ -1147,7 +1195,7 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">资源配置</h2>
-              <div class="section-copy">深色玻璃风格下继续保留仓库、作者、模型三类核心资源的分组维护。</div>
+              <div class="section-copy">集中维护仓库、作者映射和模型配置。</div>
             </div>
             <span class="tag">资源层</span>
           </div>
@@ -1164,7 +1212,7 @@
                 <summary class="module-head">
                   <div class="module-meta">
                     <strong>仓库接入</strong>
-                    <span class="module-hint">默认先看已保存仓库，再按需通过弹窗新增或验证</span>
+                    <span class="module-hint">查看已保存仓库，支持新增、编辑和验证。</span>
                   </div>
                   <span class="module-count" id="repoModuleCount">0 个仓库</span>
                 </summary>
@@ -1182,7 +1230,7 @@
                 <summary class="module-head">
                   <div class="module-meta">
                     <strong>作者识别</strong>
-                    <span class="module-hint">默认先看已保存映射，再通过弹窗新增或自动发现候选作者</span>
+                    <span class="module-hint">查看已保存映射，支持手动新增和自动发现作者。</span>
                   </div>
                   <span class="module-count" id="aliasModuleCount">0 个映射</span>
                 </summary>
@@ -1192,7 +1240,7 @@
                     <button class="secondary" type="button" onclick="discoverAliases()">自动获取候选</button>
                   </div>
                   <div class="collection" id="aliasSavedList"></div>
-                  <div class="info-box" id="aliasDiscoveryResult">可以手动添加，也可以从已配置仓库中自动发现近期作者。</div>
+                  <div class="info-box" id="aliasDiscoveryResult">可手动添加，也可自动发现近期作者。</div>
                   <div class="candidate-list" id="aliasCandidateList"></div>
                 </div>
               </details>
@@ -1242,7 +1290,7 @@
                       <button type="submit">保存配置</button>
                     </div>
                   </form>
-                  <div class="info-box" id="llmTestResult">填写配置后可以先点“检测连接”，确认接口可用再保存。若只有日报阶段超时，可优先提高“日报超时”；若单条提交经常超时，再提高“提交摘要超时”。</div>
+                  <div class="info-box" id="llmTestResult">建议先检测连接，再保存配置。</div>
                 </div>
               </details>
             </div>
@@ -1253,7 +1301,7 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">模型与环境</h2>
-              <div class="section-copy">把 LLM 配置独立成右侧副面板，风格上贴近参考图的网关配置体验。</div>
+              <div class="section-copy">配置模型连接、超时参数和运行环境。</div>
             </div>
             <span class="tag" id="llmModuleStatusBadge">未检测</span>
           </div>
@@ -1261,10 +1309,10 @@
           <div class="stack">
             <section class="inline-section">
               <h3>流程配置</h3>
-              <div class="info-box" id="workspaceSummary">先加载仪表盘数据，随后会按从上到下的流程展示必需项与可选项。</div>
-              <div class="footer-note">必须流程</div>
+              <div class="info-box" id="workspaceSummary">这里会显示当前配置完成情况。</div>
+              <div class="footer-note">必需项</div>
               <div class="health-strip" id="pipelineStatus"></div>
-              <div class="footer-note">可选流程</div>
+              <div class="footer-note">可选项</div>
               <div class="health-strip" id="optionalPipelineStatus"></div>
             </section>
           </div>
@@ -1278,14 +1326,15 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">调度中心</h2>
-              <div class="section-copy">自动化规则单独成页，仍然是深色控制台，但更适合持续维护运行节奏。</div>
+              <div class="section-copy">管理日报、周报、月报的自动生成规则。</div>
             </div>
             <span class="tag" id="scheduleModuleCount">0 条规则</span>
           </div>
 
           <div class="stack">
-            <div class="schedule-grid" id="scheduleList"></div>
-            <div class="footer-note">`weekday` 使用 0-6 表示周一到周日；月度任务使用 `day_of_month`。每日任务只需设置时间。</div>
+            <div class="info-box schedule-tab-copy">按报告类型分别维护调度规则，查看和修改更清晰。</div>
+            <div id="scheduleList"></div>
+            <div class="footer-note" id="scheduleFieldHint">`weekday` 使用 0-6 表示周一到周日；月度任务使用 `day_of_month`。每日任务只需设置时间。</div>
           </div>
         </div>
 
@@ -1293,13 +1342,13 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">调度状态</h2>
-              <div class="section-copy">用右侧状态区判断当前自动生成链路是否稳定。</div>
+              <div class="section-copy">查看最近执行结果和当前状态。</div>
             </div>
             <span class="tag" id="scheduleHealthChip">等待数据</span>
           </div>
 
           <div class="stack">
-            <div class="info-box" id="scheduleSummaryBox">调度数据加载后，这里会提示启用情况与最近执行结果。</div>
+            <div class="info-box" id="scheduleSummaryBox">这里会显示调度启用情况和最近执行结果。</div>
             <section class="job-frame">
               <div class="collection-head">
                 <h3>最近调度日志</h3>
@@ -1334,7 +1383,7 @@
           </div>
         </div>
 
-        <div class="info-box" id="summaryStatusBox">选择日期后可以筛选当天摘要，也可以先生成当天摘要。</div>
+        <div class="info-box" id="summaryStatusBox">可按日期筛选摘要，或先生成当天摘要。</div>
         <div class="collection" id="summaryList" style="margin-top: 16px;"></div>
       </div>
     </section>
@@ -1344,7 +1393,7 @@
           <div class="panel-header">
             <div>
               <h2 class="panel-title">报告中心</h2>
-              <div class="section-copy">保持参考图的统一深色体验，同时把历史记录与报告编辑拉成真正能工作的内容子页。</div>
+              <div class="section-copy">查看历史报告，编辑内容并保存当前版本。</div>
             </div>
             <span class="tag" id="selectedReportStatus">未选择报告</span>
           </div>
@@ -1405,7 +1454,7 @@
               <div class="editor-head">
                 <div>
                   <h2 id="editorTitle">报告编辑器</h2>
-                  <div class="section-copy">先在左侧选择记录，再加载最近一次生成内容或直接编辑保存。</div>
+                  <div class="section-copy">选择报告后可载入内容、编辑并保存。</div>
                 </div>
                 <div class="toolbar">
                   <button class="secondary" type="button" onclick="loadGeneratedContent()">载入最近生成内容</button>
@@ -1429,7 +1478,7 @@
       <div class="panel-header">
         <div>
           <h2 class="panel-title" id="repoModalTitle">新增仓库</h2>
-          <div class="section-copy" id="repoModalCopy">通过弹窗完成新增与验证，主页面默认只展示已保存仓库。</div>
+          <div class="section-copy" id="repoModalCopy">填写仓库信息后可先验证，再保存。</div>
         </div>
         <button class="secondary" type="button" onclick="closeModal('repoModal')">关闭</button>
       </div>
@@ -1441,7 +1490,10 @@
           </div>
           <div>
             <label>仓库路径</label>
-            <input name="path" placeholder="C:\project\repo" required />
+            <div class="path-picker-row">
+              <input name="path" placeholder="C:\project\repo" required />
+              <button class="secondary" type="button" onclick="pickRepositoryPath()">选择文件夹</button>
+            </div>
           </div>
         </div>
         <div>
@@ -1457,7 +1509,7 @@
           <button type="submit" id="repoSubmitButton">验证后添加</button>
         </div>
       </form>
-      <div class="info-box" id="repoValidationResult">先输入仓库路径，再点“验证仓库”确认当前目录确实是可访问的 git 仓库。</div>
+      <div class="info-box" id="repoValidationResult">填写路径后可验证仓库是否可用。</div>
       <div class="preview-list" id="repoPreviewList"></div>
     </div>
   </div>
@@ -1467,7 +1519,7 @@
         <div class="panel-header">
           <div>
             <h2 class="panel-title">新增作者映射</h2>
-          <div class="section-copy">作者映射现在按仓库维护，避免不同仓库之间共用全局作者配置。</div>
+          <div class="section-copy">按仓库维护作者映射。</div>
           </div>
           <button class="secondary" type="button" onclick="closeModal('aliasModal')">关闭</button>
         </div>
@@ -1503,6 +1555,7 @@
     let selectedReport = null;
     let activePage = "overview";
     let activeConfigTab = "repositories";
+    let activeScheduleTab = "daily";
     let editingRepositoryId = null;
     let generationPollTimer = null;
     let latestGenerationStatus = null;
@@ -1556,6 +1609,26 @@
       document.querySelectorAll("[data-config-panel]").forEach((node) => {
         node.classList.toggle("active", node.dataset.configPanel === tab);
       });
+    }
+
+    function switchScheduleTab(tab) {
+      activeScheduleTab = tab;
+      document.querySelectorAll("[data-schedule-tab]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.scheduleTab === tab);
+      });
+      document.querySelectorAll("[data-schedule-panel]").forEach((node) => {
+        node.classList.toggle("active", node.dataset.schedulePanel === tab);
+      });
+
+      const activeItem = dashboard?.schedules?.find((item) => item.report_type === tab);
+      const hintMap = {
+        daily: "`weekday` 和 `day_of_month` 可留空；日报调度通常只维护执行时间。",
+        weekly: "`weekday` 使用 0-6 表示周一到周日；周报通常只需要固定星期和时间。",
+        monthly: "`day_of_month` 使用 1-31；月报通常只需要固定日期和时间。",
+      };
+
+      setText("scheduleModuleCount", activeItem ? `${getReportTypeLabel(tab)}规则` : "0 条规则");
+      setText("scheduleFieldHint", hintMap[tab] || "`weekday` 使用 0-6 表示周一到周日；月度任务使用 `day_of_month`。");
     }
 
     async function api(url, options = {}) {
@@ -1702,7 +1775,7 @@
       setText("summaryCenterCount", `${commitSummaries.length} 条摘要`);
       if (!target || !statusBox) return;
       if (!commitSummaries.length) {
-        target.innerHTML = "<div class='empty-state'>当前条件下还没有摘要记录。你可以选择一个日期后点击“生成当天摘要”。</div>";
+        target.innerHTML = "<div class='empty-state'>当前条件下没有摘要记录。</div>";
         statusBox.className = "info-box";
         statusBox.textContent = selectedDate
           ? `当前没有 ${selectedDate} 的摘要记录。`
@@ -1860,11 +1933,11 @@
 
       const summaryMessage = readyCount === 3
         ? scheduleReady
-          ? "必须流程已全部完成，当前可以直接生成报告，也可以交给调度自动运行。"
-          : "必须流程已全部完成，当前可以直接生成报告；如果需要自动运行，再按需开启调度。"
+          ? "必需配置已完成，可直接生成报告或使用自动调度。"
+          : "必需配置已完成，可直接生成报告。"
         : readyCount >= 1
-          ? "必须流程还未完成，建议按“仓库 -> 作者 -> LLM”的顺序从上到下补齐。"
-          : "当前仍处于初始化阶段，请先完成仓库、作者和 LLM 这三项必须配置。";
+          ? "还有必需配置未完成，建议先补齐仓库、作者映射和 LLM。"
+          : "请先完成仓库、作者映射和 LLM 配置。";
 
       if (readyCount === 3) {
         setClassName("heroWorkspaceSummary", "info-box success");
@@ -1891,7 +1964,7 @@
         }
       } else {
         overviewNarrative.className = "info-box";
-        overviewNarrative.textContent = "还没有调度执行记录。你可以先手动生成报告，或点击顶部按钮立即检查一次调度任务。";
+        overviewNarrative.textContent = "还没有调度执行记录。";
         if (scheduleSummaryBox) {
           scheduleSummaryBox.className = "info-box";
           scheduleSummaryBox.textContent = enabledSchedules > 0
@@ -1950,7 +2023,7 @@
     function resetRepoFormMode() {
       editingRepositoryId = null;
       setText("repoModalTitle", "新增仓库");
-      setText("repoModalCopy", "通过弹窗完成新增与验证，主页面默认只展示已保存仓库。");
+      setText("repoModalCopy", "填写仓库信息后可先验证，再保存。");
       setText("repoSubmitButton", "验证后添加");
     }
 
@@ -2132,55 +2205,95 @@
       const target = document.getElementById("scheduleList");
       if (!dashboard.schedules.length) {
         target.innerHTML = "<div class='empty-state'>当前没有调度规则。</div>";
+        setText("scheduleModuleCount", "0 条规则");
         return;
       }
-      target.innerHTML = dashboard.schedules.map((item) => `
-        <form class="schedule-card" onsubmit="event.preventDefault(); saveSchedule(${item.id}, this)">
-          <div class="row-2">
-            <div>
-              <label>报告类型</label>
-              <input name="report_type" value="${item.report_type}" readonly />
+      const scheduleOrder = ["daily", "weekly", "monthly"];
+      const schedules = dashboard.schedules
+        .slice()
+        .sort((a, b) => scheduleOrder.indexOf(a.report_type) - scheduleOrder.indexOf(b.report_type));
+      const availableTabs = schedules.map((item) => item.report_type);
+
+      if (!availableTabs.includes(activeScheduleTab)) {
+        activeScheduleTab = availableTabs[0];
+      }
+
+      target.innerHTML = `
+        <div class="subtab-bar" aria-label="调度规则子标签">
+          ${schedules.map((item) => `
+            <button
+              class="subtab-btn ${item.report_type === activeScheduleTab ? "active" : ""}"
+              type="button"
+              data-schedule-tab="${item.report_type}"
+              onclick="switchScheduleTab('${item.report_type}')"
+            >
+              ${getReportTypeLabel(item.report_type)}
+            </button>
+          `).join("")}
+        </div>
+        ${schedules.map((item) => `
+          <div class="schedule-panel ${item.report_type === activeScheduleTab ? "active" : ""}" data-schedule-panel="${item.report_type}">
+            <div class="schedule-tab-header">
+              <div>
+                <h3>${getReportTypeLabel(item.report_type)}调度</h3>
+                <p>${item.report_type === "daily"
+                  ? "适合固定每天产出，重点关注执行时间是否稳定。"
+                  : item.report_type === "weekly"
+                    ? "适合周节奏汇总，通常需要固定星期几生成。"
+                    : "适合月度复盘，通常需要固定每月日期生成。"}
+                </p>
+              </div>
+              <span class="tag">${item.is_enabled ? "已启用" : "未启用"}</span>
             </div>
-            <div>
-              <label>是否启用</label>
-              <select name="is_enabled">
-                <option value="true" ${item.is_enabled ? "selected" : ""}>启用</option>
-                <option value="false" ${!item.is_enabled ? "selected" : ""}>停用</option>
-              </select>
-            </div>
+            <form class="schedule-card" onsubmit="event.preventDefault(); saveSchedule(${item.id}, this)">
+              <div class="row-2">
+                <div>
+                  <label>报告类型</label>
+                  <input name="report_type" value="${item.report_type}" readonly />
+                </div>
+                <div>
+                  <label>是否启用</label>
+                  <select name="is_enabled">
+                    <option value="true" ${item.is_enabled ? "selected" : ""}>启用</option>
+                    <option value="false" ${!item.is_enabled ? "selected" : ""}>停用</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row-3">
+                <div>
+                  <label>频率</label>
+                  <select name="cadence">
+                    <option value="daily" ${item.cadence === "daily" ? "selected" : ""}>daily</option>
+                    <option value="weekly" ${item.cadence === "weekly" ? "selected" : ""}>weekly</option>
+                    <option value="monthly" ${item.cadence === "monthly" ? "selected" : ""}>monthly</option>
+                  </select>
+                </div>
+                <div>
+                  <label>hour</label>
+                  <input name="hour" type="number" min="0" max="23" value="${item.hour}" />
+                </div>
+                <div>
+                  <label>minute</label>
+                  <input name="minute" type="number" min="0" max="59" value="${item.minute}" />
+                </div>
+              </div>
+              <div class="row-2">
+                <div>
+                  <label>weekday</label>
+                  <input name="weekday" type="number" min="0" max="6" value="${item.weekday ?? ""}" />
+                </div>
+                <div>
+                  <label>day_of_month</label>
+                  <input name="day_of_month" type="number" min="1" max="31" value="${item.day_of_month ?? ""}" />
+                </div>
+              </div>
+              <div class="footer-note">最近执行：${item.last_run_at ? formatDateTimeForDisplay(item.last_run_at) : "暂无"}</div>
+              <button type="submit">保存调度</button>
+            </form>
           </div>
-          <div class="row-3">
-            <div>
-              <label>频率</label>
-              <select name="cadence">
-                <option value="daily" ${item.cadence === "daily" ? "selected" : ""}>daily</option>
-                <option value="weekly" ${item.cadence === "weekly" ? "selected" : ""}>weekly</option>
-                <option value="monthly" ${item.cadence === "monthly" ? "selected" : ""}>monthly</option>
-              </select>
-            </div>
-            <div>
-              <label>hour</label>
-              <input name="hour" type="number" min="0" max="23" value="${item.hour}" />
-            </div>
-            <div>
-              <label>minute</label>
-              <input name="minute" type="number" min="0" max="59" value="${item.minute}" />
-            </div>
-          </div>
-          <div class="row-2">
-            <div>
-              <label>weekday</label>
-              <input name="weekday" type="number" min="0" max="6" value="${item.weekday ?? ""}" />
-            </div>
-            <div>
-              <label>day_of_month</label>
-              <input name="day_of_month" type="number" min="1" max="31" value="${item.day_of_month ?? ""}" />
-            </div>
-          </div>
-          <div class="footer-note">最近执行：${item.last_run_at ? formatDateTimeForDisplay(item.last_run_at) : "暂无"}</div>
-          <button type="submit">保存调度</button>
-        </form>
-      `).join("");
+        `).join("")}
+      `;
+      switchScheduleTab(activeScheduleTab);
     }
 
     function fillLlmSettings() {
@@ -2444,13 +2557,36 @@
       target.textContent = message;
     }
 
+    async function pickRepositoryPath() {
+      const form = document.getElementById("repoForm");
+      try {
+        renderRepoValidationResult(true, "正在打开文件夹选择器...");
+        const result = await api("/api/system/select-directory");
+        if (!result.ok || !result.path) {
+          renderRepoValidationResult(false, "未选择文件夹。");
+          return;
+        }
+
+        form.path.value = result.path;
+        if (!form.name.value.trim()) {
+          const normalized = result.path.replace(/[\\/]+$/, "");
+          const parts = normalized.split(/[\\/]/).filter(Boolean);
+          form.name.value = parts[parts.length - 1] || form.name.value;
+        }
+        renderRepoValidationResult(true, `已选择目录：${result.path}`);
+      } catch (error) {
+        renderRepoValidationResult(false, error.message);
+        alert(error.message);
+      }
+    }
+
     function renderRepoPreview(result) {
       const target = document.getElementById("repoPreviewList");
       if (!result || !result.preview_commits || !result.preview_commits.length) {
         target.innerHTML = "";
         return;
       }
-      const summary = `<div class="info-box ${result.matched_count > 0 ? "success" : "error"}">最近预览到 ${result.preview_count} 条提交，其中命中作者映射 ${result.matched_count} 条。</div>`;
+      const summary = `<div class="info-box ${result.matched_count > 0 ? "success" : "error"}">预览到 ${result.preview_count} 条提交，命中作者映射 ${result.matched_count} 条。</div>`;
       const items = result.preview_commits.map((commit) => `
         <div class="preview-item">
           <div>
@@ -2471,7 +2607,7 @@
         return renderRepoValidationResult(false, "请先填写仓库路径。");
       }
       try {
-        renderRepoValidationResult(true, "正在验证仓库路径，请稍候...");
+        renderRepoValidationResult(true, "正在验证仓库路径...");
         const result = await api("/api/repositories/validate", {
           method: "POST",
           body: JSON.stringify({ path: payload.path, limit: 5 }),
@@ -2495,11 +2631,11 @@
       try {
         editingRepositoryId = repository.id;
         setText("repoModalTitle", `编辑仓库：${repository.name}`);
-        setText("repoModalCopy", "可以修改仓库名称、路径、备注和过滤规则，保存前也可以先重新验证。");
+        setText("repoModalCopy", "可修改仓库信息，并在保存前重新验证。");
         setText("repoSubmitButton", "保存修改");
         openModal("repoModal");
         fillRepoForm(repository);
-        renderRepoValidationResult(true, `正在验证仓库 ${repository.name}，请稍候...`);
+        renderRepoValidationResult(true, `正在验证仓库 ${repository.name}...`);
         const result = await api("/api/repositories/validate", {
           method: "POST",
           body: JSON.stringify({ path: repository.path, limit: 5 }),
@@ -2517,14 +2653,14 @@
 
     async function discoverAliases() {
       try {
-        renderAliasDiscoveryResult(true, "正在扫描已配置仓库中的近期作者，请稍候...");
+        renderAliasDiscoveryResult(true, "正在扫描近期作者...");
         const result = await api("/api/aliases/discover");
         if (!result.items.length) {
-          renderAliasDiscoveryResult(false, "没有发现新的作者候选。可能是仓库还没配置，或现有作者都已经映射过了。");
+          renderAliasDiscoveryResult(false, "没有发现新的作者候选。");
           renderAliasCandidates([]);
           return;
         }
-        renderAliasDiscoveryResult(true, `发现 ${result.items.length} 个新的作者候选，可一键填入或直接添加。`);
+        renderAliasDiscoveryResult(true, `发现 ${result.items.length} 个作者候选。`);
         renderAliasCandidates(result.items);
       } catch (error) {
         renderAliasDiscoveryResult(false, error.message);
@@ -2541,7 +2677,7 @@
       form.canonical_name.value = item.canonical_name || "";
       form.alias_name.value = item.alias_name || "";
       form.alias_email.value = item.alias_email || "";
-      renderAliasDiscoveryResult(true, "候选作者已填入表单，可先检查后再保存。");
+      renderAliasDiscoveryResult(true, "已填入表单。");
     }
 
     async function saveAliasCandidate(index) {
@@ -2586,7 +2722,7 @@
     async function testLlmSettings() {
       const payload = currentLlmPayload();
       try {
-        renderLlmTestResult(true, "正在检测 LLM 连接，请稍候...");
+        renderLlmTestResult(true, "正在检测 LLM 连接...");
         const result = await api("/api/settings/llm/test", {
           method: "POST",
           body: JSON.stringify(payload),

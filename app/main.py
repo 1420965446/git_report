@@ -89,6 +89,32 @@ def _llm_client(conn) -> LlmClient:
     )
 
 
+@app.get("/api/system/select-directory")
+def select_directory() -> dict:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"当前环境不支持打开文件夹选择器：{exc}") from exc
+
+    root = None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected_path = filedialog.askdirectory(title="选择 Git 仓库文件夹")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"打开文件夹选择器失败：{exc}") from exc
+    finally:
+        if root is not None:
+            root.destroy()
+
+    return {
+        "ok": bool(selected_path),
+        "path": selected_path or "",
+    }
+
+
 def _set_generation_status(**updates) -> dict:
     with generation_status_lock:
         generation_status.update(updates)
